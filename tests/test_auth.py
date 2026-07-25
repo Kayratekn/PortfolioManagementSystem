@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 
 def test_register_login_and_me_flow(client) -> None:
@@ -84,6 +84,16 @@ def test_login_rejects_invalid_password(client) -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid email or password."
+
+
+def test_me_rejects_invalid_token(client) -> None:
+    response = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": "Bearer this-is-not-a-valid-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication credentials were not provided or are invalid."
 
 
 def test_me_requires_bearer_token(client) -> None:
