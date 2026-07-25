@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import sys
 from pathlib import Path
@@ -10,6 +10,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config.settings import get_settings
+from src.controller.auth_controller import router as auth_router
 from src.controller.health_controller import router as health_router
 
 
@@ -17,3 +18,4 @@ settings = get_settings()
 
 app = FastAPI(title=settings.app_name)
 app.include_router(health_router)
+app.include_router(auth_router)

@@ -1,7 +1,11 @@
 fastapi
 uvicorn
+sqlalchemy
+alembic
+psycopg2-binary
 pydantic
 pydantic-settings
 python-dotenv
 email-validator
 pytest
+httpx2

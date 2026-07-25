@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from functools import lru_cache
 
@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Portfolio Management System"
+    database_url: str = Field(
+        default="postgresql+psycopg2://postgres:postgres@localhost:5432/ai_portfolio"
+    )
     jwt_secret_key: str = Field(default="change-this-secret-in-env")
     jwt_access_token_expire_minutes: int = Field(default=60)
     jwt_issuer: str = Field(default="portfolio-management-system")
