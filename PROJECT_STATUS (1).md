@@ -6,14 +6,14 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication and database foundation implemented; auth flow verified locally with SQLite; PostgreSQL auth verification pending; portfolio domain not started
+- **Current backend stage:** Authentication and database foundation implemented; auth flow verified locally with both SQLite and PostgreSQL; portfolio domain not started
 - **Status updated:** 2026-07-25
 
 ## Product summary
 
 The system will allow an individual investor to track TEFAS funds, precious metals and supported currency-based investments in one portfolio application. It will calculate portfolio value in multiple currencies and later add benchmark comparison and AI-supported analysis.
 
-The current repository only contains the backend foundation and the first verified user authentication flow. Local verification has been completed with SQLite; PostgreSQL has not yet been verified locally.
+The current repository only contains the backend foundation and the first verified user authentication flow. Local verification has been completed with both SQLite and PostgreSQL.
 
 ## Current repository structure
 
@@ -47,7 +47,7 @@ tests/
 | User entity | Complete | SQLAlchemy `User` model implemented |
 | User repository | Complete | Lookup and create operations implemented |
 | Authentication service | Complete | Password hashing, JWT creation/validation and user service are implemented |
-| Authentication API | Complete | `register`, `login` and `me` endpoints are implemented; flow verified locally with SQLite, PostgreSQL verification still pending |
+| Authentication API | Complete | `register`, `login` and `me` endpoints are implemented; flow verified locally with both SQLite and PostgreSQL |
 | Auth tests | Complete | Pytest coverage added for happy path plus duplicate email, wrong password and invalid token negative cases |
 | Portfolio / Asset / Transaction domain | Not started | No portfolio models, routes or calculations yet |
 | Market-data integration | Not started | No adapters or sync services yet |
@@ -94,7 +94,7 @@ GET  /api/v1/auth/me
 - `python -m pytest`
 - `python -m alembic upgrade head` verified against a temporary SQLite database by setting `DATABASE_URL=sqlite:///./tmp_alembic_test.db`
 - Auth flow verified locally through Swagger with SQLite for `GET /api/v1/health`, `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, JWT authorize and `GET /api/v1/auth/me`
-- PostgreSQL local auth verification is still pending
+- PostgreSQL connection, `python -m alembic upgrade head`, `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, JWT authorize and `GET /api/v1/auth/me` were verified locally
 
 ## Git analysis note
 
@@ -102,7 +102,7 @@ The repository history currently contains only one pre-analysis project commit (
 
 ## Immediate next backend steps
 
-1. Verify the same auth flow locally against PostgreSQL before marking database support fully validated.
+1. Keep auth stable across both verified local databases: SQLite and PostgreSQL.
 2. Keep auth stable and expand remaining negative-path coverage such as duplicate username or inactive user if needed.
 3. Add central exception formatting if the team wants uniform API error bodies.
 4. Only after auth contract is stable, start Portfolio, Asset and Transaction entities in a vertical slice.
@@ -116,3 +116,4 @@ python -m alembic upgrade head
 python -m pytest
 uvicorn src.main:app --reload
 ```
+
