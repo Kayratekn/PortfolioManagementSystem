@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Generator
 from typing import Annotated
@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 from src.config.database import get_db_session
 from src.config.settings import get_settings
+from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.user_repository import UserRepository
+from src.services.portfolio_service import PortfolioService
 from src.services.token_service import TokenService
 from src.services.user_service import UserService
 
@@ -25,6 +27,10 @@ def get_user_repository(db: Annotated[Session, Depends(get_db)]) -> UserReposito
     return UserRepository(db)
 
 
+def get_portfolio_repository(db: Annotated[Session, Depends(get_db)]) -> PortfolioRepository:
+    return PortfolioRepository(db)
+
+
 def get_token_service() -> TokenService:
     settings = get_settings()
     return TokenService(
@@ -38,6 +44,12 @@ def get_user_service(
     user_repository: Annotated[UserRepository, Depends(get_user_repository)],
 ) -> UserService:
     return UserService(user_repository)
+
+
+def get_portfolio_service(
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+) -> PortfolioService:
+    return PortfolioService(portfolio_repository)
 
 
 def get_current_user(
