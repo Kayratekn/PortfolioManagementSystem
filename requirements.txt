@@ -8,4 +8,4 @@ pydantic-settings
 python-dotenv
 email-validator
 pytest
-httpx2
+httpx

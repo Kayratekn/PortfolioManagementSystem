@@ -1,0 +1,19 @@
+{
+  "errorCode": null,
+  "errorMessage": null,
+  "resultList": [
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-24",
+      "fiyat": 3.163587,
+      "tedPaySayisi": 960084201,
+      "kisiSayisi": 4845,
+      "portfoyBuyukluk": 3037309510.91,
+      "borsaBultenFiyat": null,
+      "rn": 1
+    }
+  ],
+  "toplamSayi": 1,
+  "toplamSayfa": 1
+}
