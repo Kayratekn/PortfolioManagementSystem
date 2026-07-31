@@ -1,0 +1,195 @@
+{
+  "errorCode": null,
+  "errorMessage": null,
+  "resultList": [
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-24",
+      "fiyat": 3.163587,
+      "tedPaySayisi": 960084201,
+      "kisiSayisi": 4845,
+      "portfoyBuyukluk": 3037309510.91,
+      "borsaBultenFiyat": null,
+      "rn": 1
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-22",
+      "fiyat": 3.157261,
+      "tedPaySayisi": 956773331,
+      "kisiSayisi": 4842,
+      "portfoyBuyukluk": 3020782933.53,
+      "borsaBultenFiyat": null,
+      "rn": 2
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-21",
+      "fiyat": 3.15396,
+      "tedPaySayisi": 942472221,
+      "kisiSayisi": 4811,
+      "portfoyBuyukluk": 2972519960.96,
+      "borsaBultenFiyat": null,
+      "rn": 3
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-20",
+      "fiyat": 3.15069,
+      "tedPaySayisi": 938974971,
+      "kisiSayisi": 4821,
+      "portfoyBuyukluk": 2958418879.14,
+      "borsaBultenFiyat": null,
+      "rn": 4
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-17",
+      "fiyat": 3.140621,
+      "tedPaySayisi": 924512291,
+      "kisiSayisi": 4813,
+      "portfoyBuyukluk": 2903542789.81,
+      "borsaBultenFiyat": null,
+      "rn": 5
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-16",
+      "fiyat": 3.136684,
+      "tedPaySayisi": 944803041,
+      "kisiSayisi": 4795,
+      "portfoyBuyukluk": 2963548480.46,
+      "borsaBultenFiyat": null,
+      "rn": 6
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-15",
+      "fiyat": 3.132247,
+      "tedPaySayisi": 951930491,
+      "kisiSayisi": 4783,
+      "portfoyBuyukluk": 2981681144.62,
+      "borsaBultenFiyat": null,
+      "rn": 7
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-14",
+      "fiyat": 3.12808,
+      "tedPaySayisi": 946740161,
+      "kisiSayisi": 4769,
+      "portfoyBuyukluk": 2961479288.45,
+      "borsaBultenFiyat": null,
+      "rn": 8
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-13",
+      "fiyat": 3.125076,
+      "tedPaySayisi": 944207981,
+      "kisiSayisi": 4774,
+      "portfoyBuyukluk": 2950722097.38,
+      "borsaBultenFiyat": null,
+      "rn": 9
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-10",
+      "fiyat": 3.115136,
+      "tedPaySayisi": 941506811,
+      "kisiSayisi": 4767,
+      "portfoyBuyukluk": 2932921886.93,
+      "borsaBultenFiyat": null,
+      "rn": 10
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-09",
+      "fiyat": 3.111462,
+      "tedPaySayisi": 943851361,
+      "kisiSayisi": 4777,
+      "portfoyBuyukluk": 2936757252.17,
+      "borsaBultenFiyat": null,
+      "rn": 11
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-08",
+      "fiyat": 3.10689,
+      "tedPaySayisi": 1016718761,
+      "kisiSayisi": 4758,
+      "portfoyBuyukluk": 3158833510.81,
+      "borsaBultenFiyat": null,
+      "rn": 12
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-07",
+      "fiyat": 3.103681,
+      "tedPaySayisi": 969213421,
+      "kisiSayisi": 4758,
+      "portfoyBuyukluk": 3008129096.84,
+      "borsaBultenFiyat": null,
+      "rn": 13
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-06",
+      "fiyat": 3.100466,
+      "tedPaySayisi": 969640211,
+      "kisiSayisi": 4778,
+      "portfoyBuyukluk": 3006336892.5,
+      "borsaBultenFiyat": null,
+      "rn": 14
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-03",
+      "fiyat": 3.09089,
+      "tedPaySayisi": 961994151,
+      "kisiSayisi": 4764,
+      "portfoyBuyukluk": 2973417979.04,
+      "borsaBultenFiyat": null,
+      "rn": 15
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-02",
+      "fiyat": 3.087897,
+      "tedPaySayisi": 975786161,
+      "kisiSayisi": 4754,
+      "portfoyBuyukluk": 3013127576.37,
+      "borsaBultenFiyat": null,
+      "rn": 16
+    },
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-01",
+      "fiyat": 3.083909,
+      "tedPaySayisi": 995360771,
+      "kisiSayisi": 4746,
+      "portfoyBuyukluk": 3069602279.56,
+      "borsaBultenFiyat": null,
+      "rn": 17
+    }
+  ],
+  "toplamSayi": 17,
+  "toplamSayfa": 1
+}

@@ -1,0 +1,119 @@
+{
+  "errorCode": null,
+  "errorMessage": null,
+  "toplamSayi": 1995,
+  "toplamSayfa": 1,
+  "observedRecordCount": 1995,
+  "resultList": [
+    {
+      "fonKodu": "AAL",
+      "fonUnvan": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+      "tarih": "2026-04-24",
+      "fiyat": 3.163587,
+      "tedPaySayisi": 960084201,
+      "kisiSayisi": 4845,
+      "portfoyBuyukluk": 3037309510.91,
+      "borsaBultenFiyat": null,
+      "rn": 1
+    },
+    {
+      "fonKodu": "AAS",
+      "fonUnvan": "ATA PORTFÖY FON SEPETİ SERBEST FONU",
+      "tarih": "2026-04-24",
+      "fiyat": 11.304688,
+      "tedPaySayisi": 2110517,
+      "kisiSayisi": 158,
+      "portfoyBuyukluk": 23858735.43,
+      "borsaBultenFiyat": null,
+      "rn": 2
+    },
+    {
+      "fonKodu": "AAV",
+      "fonUnvan": "ATA PORTFÖY İKİNCİ HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)",
+      "tarih": "2026-04-24",
+      "fiyat": 62.641428,
+      "tedPaySayisi": 4859002,
+      "kisiSayisi": 2312,
+      "portfoyBuyukluk": 304374822.33,
+      "borsaBultenFiyat": null,
+      "rn": 3
+    },
+    {
+      "fonKodu": "ABG",
+      "fonUnvan": "ATLAS PORTFÖY DÖRDÜNCÜ SERBEST (TL) FON",
+      "tarih": "2026-04-24",
+      "fiyat": 61.013064,
+      "tedPaySayisi": 123481839,
+      "kisiSayisi": 159,
+      "portfoyBuyukluk": 7534005398.46,
+      "borsaBultenFiyat": null,
+      "rn": 4
+    },
+    {
+      "fonKodu": "ABJ",
+      "fonUnvan": "ALLBATROSS PORTFÖY BENZ HİSSE SENEDİ SERBEST (TL) ÖZEL FON (HİSSE SENEDİ YOĞUN FON)",
+      "tarih": "2026-04-24",
+      "fiyat": 0.865476,
+      "tedPaySayisi": 1337341991,
+      "kisiSayisi": 3,
+      "portfoyBuyukluk": 1157437113.25,
+      "borsaBultenFiyat": null,
+      "rn": 5
+    },
+    {
+      "fonKodu": "ABU",
+      "fonUnvan": "AK PORTFÖY BİREBİR BANKACILIK DEĞİŞKEN ÖZEL FON",
+      "tarih": "2026-04-24",
+      "fiyat": 0.093662,
+      "tedPaySayisi": 580108894,
+      "kisiSayisi": 37,
+      "portfoyBuyukluk": 54334041.23,
+      "borsaBultenFiyat": null,
+      "rn": 6
+    },
+    {
+      "fonKodu": "AC1",
+      "fonUnvan": "PARDUS PORTFÖY KISA VADELİ KATILIM SERBEST FONU",
+      "tarih": "2026-04-24",
+      "fiyat": 2.850502,
+      "tedPaySayisi": 100711444,
+      "kisiSayisi": 162,
+      "portfoyBuyukluk": 287078211.6,
+      "borsaBultenFiyat": null,
+      "rn": 7
+    },
+    {
+      "fonKodu": "AC2",
+      "fonUnvan": "PARDUS PORTFÖY İKİNCİ SERBEST FON",
+      "tarih": "2026-04-24",
+      "fiyat": 3.547098,
+      "tedPaySayisi": 2478718109,
+      "kisiSayisi": 48,
+      "portfoyBuyukluk": 8792256273.75,
+      "borsaBultenFiyat": null,
+      "rn": 8
+    },
+    {
+      "fonKodu": "AC3",
+      "fonUnvan": "PARDUS PORTFÖY ÜÇÜNCÜ SERBEST (DÖVİZ) FON",
+      "tarih": "2026-04-24",
+      "fiyat": 66.538101,
+      "tedPaySayisi": 2090562,
+      "kisiSayisi": 14,
+      "portfoyBuyukluk": 139102024.9,
+      "borsaBultenFiyat": null,
+      "rn": 9
+    },
+    {
+      "fonKodu": "AC4",
+      "fonUnvan": "PARDUS PORTFÖY PARA PİYASASI (TL) FON",
+      "tarih": "2026-04-24",
+      "fiyat": 3.498726,
+      "tedPaySayisi": 453833745,
+      "kisiSayisi": 3596,
+      "portfoyBuyukluk": 1587839764.06,
+      "borsaBultenFiyat": null,
+      "rn": 10
+    }
+  ]
+}
