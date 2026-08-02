@@ -7,7 +7,9 @@ from sqlalchemy import engine_from_config, pool
 
 from src.config.settings import get_settings
 from src.model.base import Base
+from src.model import asset  # noqa: F401
 from src.model import portfolio  # noqa: F401
+from src.model import tefas_fund_daily_data  # noqa: F401
 from src.model import user  # noqa: F401
 
 
