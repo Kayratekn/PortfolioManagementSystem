@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from functools import lru_cache
 
@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-this-secret-in-env")
     jwt_access_token_expire_minutes: int = Field(default=60)
     jwt_issuer: str = Field(default="portfolio-management-system")
+    tefas_base_url: str = Field(default="https://www.tefas.gov.tr")
+    tefas_timeout_seconds: float = Field(default=30.0, gt=0)
+    tefas_max_retries: int = Field(default=3, ge=0)
+    tefas_retry_wait_seconds: float = Field(default=10.0, ge=0)
 
 
 @lru_cache
