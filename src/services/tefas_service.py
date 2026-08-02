@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from src.integrations.tefas_client import CustomTefasClient, FundKind
@@ -102,25 +103,105 @@ class TefasService:
         row: dict[str, Any],
         fund_kind: FundKind,
     ) -> dict[str, Any]:
-        fund_code = row.get("fonKodu")
-        fund_name = row.get("fonUnvan")
-
         return {
-            "fund_code": (
-                fund_code.strip().upper()
-                if isinstance(fund_code, str)
-                else fund_code
+            "fund_code": TefasService._normalize_required_string(
+                row.get("fonKodu"),
+                field_name="fund_code",
+                uppercase=True,
             ),
-            "fund_name": (
-                fund_name.strip()
-                if isinstance(fund_name, str)
-                else fund_name
+            "fund_name": TefasService._normalize_required_string(
+                row.get("fonUnvan"),
+                field_name="fund_name",
             ),
-            "fund_kind": fund_kind,
-            "data_date": row.get("tarih"),
-            "price": row.get("fiyat"),
-            "shares_outstanding": row.get("tedPaySayisi"),
-            "investor_count": row.get("kisiSayisi"),
-            "portfolio_size": row.get("portfoyBuyukluk"),
-            "exchange_bulletin_price": row.get("borsaBultenFiyat"),
+            "fund_kind": TefasService._normalize_required_string(
+                fund_kind,
+                field_name="fund_kind",
+                uppercase=True,
+            ),
+            "data_date": TefasService._normalize_date(
+                row.get("tarih"),
+                field_name="data_date",
+            ),
+            "price": TefasService._normalize_required_decimal(
+                row.get("fiyat"),
+                field_name="price",
+            ),
+            "shares_outstanding": TefasService._normalize_optional_decimal(
+                row.get("tedPaySayisi"),
+                field_name="shares_outstanding",
+            ),
+            "investor_count": TefasService._normalize_optional_int(
+                row.get("kisiSayisi"),
+                field_name="investor_count",
+            ),
+            "portfolio_size": TefasService._normalize_optional_decimal(
+                row.get("portfoyBuyukluk"),
+                field_name="portfolio_size",
+            ),
+            "exchange_bulletin_price": TefasService._normalize_optional_decimal(
+                row.get("borsaBultenFiyat"),
+                field_name="exchange_bulletin_price",
+            ),
         }
+
+    @staticmethod
+    def _normalize_required_string(
+        value: Any,
+        *,
+        field_name: str,
+        uppercase: bool = False,
+    ) -> str:
+        if not isinstance(value, str):
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        normalized_value = value.strip()
+        if not normalized_value:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        if uppercase:
+            normalized_value = normalized_value.upper()
+
+        return normalized_value
+
+    @staticmethod
+    def _normalize_date(value: Any, *, field_name: str) -> date:
+        if isinstance(value, date):
+            return value
+
+        if isinstance(value, str):
+            try:
+                return date.fromisoformat(value)
+            except ValueError as exc:
+                raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+        raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+    @staticmethod
+    def _normalize_required_decimal(value: Any, *, field_name: str) -> Decimal:
+        if value is None:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+    @staticmethod
+    def _normalize_optional_decimal(value: Any, *, field_name: str) -> Decimal | None:
+        if value is None:
+            return None
+
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+    @staticmethod
+    def _normalize_optional_int(value: Any, *, field_name: str) -> int | None:
+        if value is None:
+            return None
+
+        try:
+            return int(value)
+        except (ValueError, TypeError) as exc:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
