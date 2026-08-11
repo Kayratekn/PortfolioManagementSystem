@@ -1,4 +1,4 @@
-from datetime import date
+﻿from datetime import date
 from decimal import Decimal
 from typing import Any
 
@@ -10,11 +10,19 @@ from src.services.tefas_service import TefasService, TefasServiceError
 class FakeTefasClient:
     """Returns a predefined response without making an HTTP request."""
 
-    def __init__(self, response: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        response: dict[str, Any],
+        portfolio_response: dict[str, Any] | None = None,
+    ) -> None:
         self.response = response
+        self.portfolio_response = portfolio_response if portfolio_response is not None else response
 
     def fetch_general_info(self, **kwargs: Any) -> dict[str, Any]:
         return self.response
+
+    def fetch_portfolio_breakdown(self, **kwargs: Any) -> dict[str, Any]:
+        return self.portfolio_response
 
 
 def test_fetch_general_info_normalizes_tefas_fields() -> None:
@@ -25,7 +33,7 @@ def test_fetch_general_info_normalizes_tefas_fields() -> None:
             "resultList": [
                 {
                     "fonKodu": " aal ",
-                    "fonUnvan": " ATA PORTFÖY PARA PİYASASI (TL) FONU ",
+                    "fonUnvan": " ATA PORTFÃ–Y PARA PÄ°YASASI (TL) FONU ",
                     "tarih": "2026-04-24",
                     "fiyat": 3.163587,
                     "tedPaySayisi": 960084201,
@@ -50,7 +58,7 @@ def test_fetch_general_info_normalizes_tefas_fields() -> None:
     assert result == [
         {
             "fund_code": "AAL",
-            "fund_name": "ATA PORTFÖY PARA PİYASASI (TL) FONU",
+            "fund_name": "ATA PORTFÃ–Y PARA PÄ°YASASI (TL) FONU",
             "fund_kind": "YAT",
             "data_date": date(2026, 4, 24),
             "price": Decimal("3.163587"),
@@ -162,6 +170,131 @@ def test_fetch_general_info_missing_or_null_price_raises_service_error(row: dict
             start_date=date(2026, 4, 24),
             end_date=date(2026, 4, 24),
         )
+
+
+def test_fetch_portfolio_breakdown_raw_filters_requested_fund_code() -> None:
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        portfolio_response={
+            "errorCode": None,
+            "errorMessage": None,
+            "resultList": [
+                {"fonKodu": "AB1", "fonUnvan": "Fund 1"},
+                {"fonKodu": "AB2", "fonUnvan": "Fund 2"},
+            ],
+        },
+    )
+
+    service = TefasService(client=fake_client)  # type: ignore[arg-type]
+
+    result = service.fetch_portfolio_breakdown_raw(
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+        fund_kind="GYF",
+        fund_code="AB1",
+    )
+
+    assert result == [{"fonKodu": "AB1", "fonUnvan": "Fund 1"}]
+
+
+def test_fetch_portfolio_breakdown_raw_filters_case_insensitively() -> None:
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        portfolio_response={
+            "errorCode": None,
+            "errorMessage": None,
+            "resultList": [
+                {"fonKodu": "ab1", "fonUnvan": "Fund 1"},
+                {"fonKodu": "AB2", "fonUnvan": "Fund 2"},
+            ],
+        },
+    )
+
+    service = TefasService(client=fake_client)  # type: ignore[arg-type]
+
+    result = service.fetch_portfolio_breakdown_raw(
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+        fund_kind="GYF",
+        fund_code="AB1",
+    )
+
+    assert result == [{"fonKodu": "ab1", "fonUnvan": "Fund 1"}]
+
+
+def test_fetch_portfolio_breakdown_raw_handles_surrounding_whitespace_in_requested_code() -> None:
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        portfolio_response={
+            "errorCode": None,
+            "errorMessage": None,
+            "resultList": [
+                {"fonKodu": " AB1 ", "fonUnvan": "Fund 1"},
+                {"fonKodu": "AB2", "fonUnvan": "Fund 2"},
+            ],
+        },
+    )
+
+    service = TefasService(client=fake_client)  # type: ignore[arg-type]
+
+    result = service.fetch_portfolio_breakdown_raw(
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+        fund_kind="GYF",
+        fund_code="  ab1  ",
+    )
+
+    assert result == [{"fonKodu": " AB1 ", "fonUnvan": "Fund 1"}]
+
+
+def test_fetch_portfolio_breakdown_raw_preserves_all_rows_without_fund_code() -> None:
+    rows = [
+        {"fonKodu": "AB1", "fonUnvan": "Fund 1"},
+        {"fonKodu": "AB2", "fonUnvan": "Fund 2"},
+    ]
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        portfolio_response={
+            "errorCode": None,
+            "errorMessage": None,
+            "resultList": rows,
+        },
+    )
+
+    service = TefasService(client=fake_client)  # type: ignore[arg-type]
+
+    result = service.fetch_portfolio_breakdown_raw(
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+        fund_kind="GYF",
+        fund_code=None,
+    )
+
+    assert result == rows
+
+
+def test_fetch_portfolio_breakdown_raw_returns_empty_when_requested_code_absent() -> None:
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        portfolio_response={
+            "errorCode": None,
+            "errorMessage": None,
+            "resultList": [
+                {"fonKodu": "AB2", "fonUnvan": "Fund 2"},
+            ],
+        },
+    )
+
+    service = TefasService(client=fake_client)  # type: ignore[arg-type]
+
+    result = service.fetch_portfolio_breakdown_raw(
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+        fund_kind="GYF",
+        fund_code="AB1",
+    )
+
+    assert result == []
 
 
 def test_out_of_bounds_response_returns_empty_list() -> None:

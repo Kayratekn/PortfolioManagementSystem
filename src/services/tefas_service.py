@@ -1,14 +1,41 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from src.integrations.tefas_client import CustomTefasClient, FundKind
+from src.services.tefas_portfolio_allocation_mapping import (
+    EXPECTED_ALLOCATION_FIELDS,
+    get_allocation_label,
+    get_mapping_status,
+)
 
 
 class TefasServiceError(RuntimeError):
     """Raised when TEFAS returns an unusable application response."""
+
+
+PORTFOLIO_BREAKDOWN_METADATA_FIELDS = frozenset(
+    {"fonKodu", "fonUnvan", "tarih", "bilFiyat"}
+)
+
+
+@dataclass(frozen=True)
+class TefasPortfolioAllocationItem:
+    raw_field_name: str
+    allocation_percentage: Decimal
+    label: str | None
+    mapping_status: str
+
+
+@dataclass(frozen=True)
+class TefasPortfolioBreakdownSnapshot:
+    fund_code: str
+    fund_name: str
+    data_date: date
+    allocations: tuple[TefasPortfolioAllocationItem, ...]
 
 
 class TefasService:
@@ -55,10 +82,7 @@ class TefasService:
         fund_kind: FundKind = "YAT",
         fund_code: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Fetch raw portfolio-breakdown records.
-
-        Normalization will be added after the endpoint fields are tested.
-        """
+        """Fetch raw portfolio-breakdown records."""
 
         response = self.client.fetch_portfolio_breakdown(
             start_date=start_date,
@@ -67,7 +91,65 @@ class TefasService:
             fund_code=fund_code,
         )
 
-        return self._extract_result_list(response)
+        rows = self._extract_result_list(response)
+        return self._filter_rows_by_fund_code(rows=rows, fund_code=fund_code)
+
+    def normalize_portfolio_breakdown_row(
+        self,
+        row: dict[str, Any],
+    ) -> TefasPortfolioBreakdownSnapshot:
+        row_keys = set(row)
+        missing_fields = sorted(EXPECTED_ALLOCATION_FIELDS - row_keys)
+        if missing_fields:
+            raise ValueError(
+                "Missing expected TEFAS portfolio allocation fields: "
+                + ", ".join(missing_fields)
+            )
+
+        unexpected_fields = sorted(
+            row_keys - EXPECTED_ALLOCATION_FIELDS - PORTFOLIO_BREAKDOWN_METADATA_FIELDS
+        )
+        if unexpected_fields:
+            raise ValueError(
+                "Unexpected TEFAS portfolio breakdown fields: "
+                + ", ".join(unexpected_fields)
+            )
+
+        allocations: list[TefasPortfolioAllocationItem] = []
+        for raw_field_name in sorted(EXPECTED_ALLOCATION_FIELDS):
+            raw_value = row[raw_field_name]
+            if raw_value is None:
+                continue
+
+            allocation_percentage = self._normalize_allocation_decimal(
+                raw_value,
+                raw_field_name=raw_field_name,
+            )
+            allocations.append(
+                TefasPortfolioAllocationItem(
+                    raw_field_name=raw_field_name,
+                    allocation_percentage=allocation_percentage,
+                    label=get_allocation_label(raw_field_name),
+                    mapping_status=get_mapping_status(raw_field_name),
+                )
+            )
+
+        return TefasPortfolioBreakdownSnapshot(
+            fund_code=self._normalize_required_string(
+                row.get("fonKodu"),
+                field_name="fund_code",
+                uppercase=True,
+            ),
+            fund_name=self._normalize_required_string(
+                row.get("fonUnvan"),
+                field_name="fund_name",
+            ),
+            data_date=self._normalize_date(
+                row.get("tarih"),
+                field_name="data_date",
+            ),
+            allocations=tuple(allocations),
+        )
 
     @staticmethod
     def _extract_result_list(
@@ -95,6 +177,23 @@ class TefasService:
             row
             for row in result_list
             if isinstance(row, dict)
+        ]
+
+    @staticmethod
+    def _filter_rows_by_fund_code(
+        *,
+        rows: list[dict[str, Any]],
+        fund_code: str | None,
+    ) -> list[dict[str, Any]]:
+        if fund_code is None:
+            return rows
+
+        normalized_fund_code = fund_code.strip().upper()
+        return [
+            row
+            for row in rows
+            if isinstance(row.get("fonKodu"), str)
+            and row["fonKodu"].strip().upper() == normalized_fund_code
         ]
 
     @staticmethod
@@ -205,3 +304,28 @@ class TefasService:
             return int(value)
         except (ValueError, TypeError) as exc:
             raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+    @staticmethod
+    def _normalize_allocation_decimal(
+        value: Any,
+        *,
+        raw_field_name: str,
+    ) -> Decimal:
+        if isinstance(value, bool):
+            raise ValueError(
+                f"Invalid TEFAS allocation value for field '{raw_field_name}': bool is not allowed"
+            )
+
+        try:
+            normalized_value = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise ValueError(
+                f"Invalid TEFAS allocation value for field '{raw_field_name}'"
+            ) from exc
+
+        if not normalized_value.is_finite():
+            raise ValueError(
+                f"Invalid TEFAS allocation value for field '{raw_field_name}': non-finite values are not allowed"
+            )
+
+        return normalized_value
