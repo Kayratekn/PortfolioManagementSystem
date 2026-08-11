@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Callable
 from datetime import date
 from typing import Any
@@ -38,6 +39,20 @@ def parse_date(value: str) -> date:
         ) from exc
 
 
+def configure_stdout() -> None:
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8")
+
+
+def normalize_fund_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized_value = value.strip().upper()
+    return normalized_value or None
+
+
 def find_rows(payload: dict[str, Any]) -> list[Any]:
     result_list = payload.get("resultList")
     if isinstance(result_list, list):
@@ -48,6 +63,23 @@ def find_rows(payload: dict[str, Any]) -> list[Any]:
             return value
 
     return []
+
+
+def filter_rows_by_fund_code(rows: list[Any], fund_code: str | None) -> list[Any]:
+    normalized_fund_code = normalize_fund_code(fund_code)
+    if normalized_fund_code is None:
+        return rows
+
+    filtered_rows: list[Any] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+
+        row_fund_code = row.get("fonKodu")
+        if isinstance(row_fund_code, str) and row_fund_code.strip().upper() == normalized_fund_code:
+            filtered_rows.append(row)
+
+    return filtered_rows
 
 
 def collect_field_names(rows: list[Any]) -> list[str]:
@@ -70,6 +102,7 @@ def print_probe_result(
     method_name: str,
     success: bool,
     payload: dict[str, Any] | None = None,
+    rows: list[Any] | None = None,
     error_message: str | None = None,
 ) -> None:
     print(f"fund_kind: {fund_kind}")
@@ -78,12 +111,12 @@ def print_probe_result(
 
     if success and payload is not None:
         top_level_keys = sorted(str(key) for key in payload.keys())
-        rows = find_rows(payload)
-        field_names = collect_field_names(rows)
-        sample_row = get_sample_row(rows)
+        resolved_rows = rows if rows is not None else find_rows(payload)
+        field_names = collect_field_names(resolved_rows)
+        sample_row = get_sample_row(resolved_rows)
 
         print(f"top_level_keys: {json.dumps(top_level_keys, ensure_ascii=False)}")
-        print(f"detected_row_count: {len(rows)}")
+        print(f"detected_row_count: {len(resolved_rows)}")
         print(f"raw_field_names: {json.dumps(field_names, ensure_ascii=False)}")
         print(
             "sample_raw_row: "
@@ -124,15 +157,19 @@ def run_probe(
         )
         return
 
+    filtered_rows = filter_rows_by_fund_code(find_rows(payload), fund_code)
+
     print_probe_result(
         fund_kind=fund_kind,
         method_name=method_name,
         success=True,
         payload=payload,
+        rows=filtered_rows,
     )
 
 
 def main() -> int:
+    configure_stdout()
     args = parse_args()
     client = CustomTefasClient()
 
