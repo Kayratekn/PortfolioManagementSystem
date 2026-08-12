@@ -1,7 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -15,6 +15,9 @@ from src.services.tefas_portfolio_allocation_mapping import (
 
 class TefasServiceError(RuntimeError):
     """Raised when TEFAS returns an unusable application response."""
+
+
+GENERAL_INFO_MAX_CHUNK_DAYS = 28
 
 
 PORTFOLIO_BREAKDOWN_METADATA_FIELDS = frozenset(
@@ -57,16 +60,21 @@ class TefasService:
     ) -> list[dict[str, Any]]:
         """Fetch and normalize general fund information."""
 
-        response = self.client.fetch_general_info(
+        rows: list[dict[str, Any]] = []
+        for chunk_start_date, chunk_end_date in self._iter_general_info_date_chunks(
             start_date=start_date,
             end_date=end_date,
-            fund_kind=fund_kind,
-            fund_code=fund_code,
-        )
+        ):
+            response = self.client.fetch_general_info(
+                start_date=chunk_start_date,
+                end_date=chunk_end_date,
+                fund_kind=fund_kind,
+                fund_code=fund_code,
+            )
+            rows.extend(self._extract_result_list(response))
 
-        rows = self._extract_result_list(response)
-
-        return [
+        rows = self._filter_rows_by_fund_code(rows=rows, fund_code=fund_code)
+        normalized_rows = [
             self._normalize_general_info_row(
                 row=row,
                 fund_kind=fund_kind,
@@ -74,6 +82,52 @@ class TefasService:
             for row in rows
         ]
 
+        return self._deduplicate_and_sort_general_info_rows(normalized_rows)
+
+    @staticmethod
+    def _iter_general_info_date_chunks(
+        *,
+        start_date: date,
+        end_date: date,
+    ) -> list[tuple[date, date]]:
+        if start_date > end_date:
+            raise ValueError("start_date cannot be later than end_date.")
+
+        chunks: list[tuple[date, date]] = []
+        chunk_start_date = start_date
+        while chunk_start_date <= end_date:
+            chunk_end_date = min(
+                chunk_start_date + timedelta(days=GENERAL_INFO_MAX_CHUNK_DAYS - 1),
+                end_date,
+            )
+            chunks.append((chunk_start_date, chunk_end_date))
+            chunk_start_date = chunk_end_date + timedelta(days=1)
+
+        return chunks
+
+    @staticmethod
+    def _deduplicate_and_sort_general_info_rows(
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        rows_by_key: dict[tuple[str, date], dict[str, Any]] = {}
+        for row in rows:
+            key = (row["fund_code"], row["data_date"])
+            existing_row = rows_by_key.get(key)
+            if existing_row is None:
+                rows_by_key[key] = row
+                continue
+
+            if existing_row != row:
+                fund_code, data_date = key
+                raise TefasServiceError(
+                    "Conflicting duplicate TEFAS general-info row: "
+                    f"fund_code={fund_code}, data_date={data_date.isoformat()}"
+                )
+
+        return sorted(
+            rows_by_key.values(),
+            key=lambda row: (row["data_date"], row["fund_code"]),
+        )
     def fetch_portfolio_breakdown_raw(
         self,
         *,

@@ -396,3 +396,240 @@ def test_success_log_update_failure_does_not_call_mark_failed(
     assert "TEFAS sync completed successfully" not in captured.out
     assert session_factory.sessions[0].closed is True
     assert session_factory.sessions[1].closed is True
+
+
+def test_historical_range_command_accepts_gyf_and_calls_sync_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_factory = SessionFactory()
+    _install_common_patches(monkeypatch, session_factory)
+
+    exit_code = sync_tefas_daily.main(
+        [
+            "--kind",
+            "GYF",
+            "--fund-code",
+            "AB1",
+            "--start-date",
+            "2026-07-01",
+            "--end-date",
+            "2026-08-11",
+        ]
+    )
+
+    assert exit_code == 0
+    assert len(FakeSyncService.instances) == 1
+    assert FakeSyncService.instances[0].calls == [
+        {
+            "start_date": date(2026, 7, 1),
+            "end_date": date(2026, 8, 11),
+            "fund_kind": "GYF",
+            "fund_code": "AB1",
+        }
+    ]
+
+
+def test_historical_range_mode_does_not_loop_one_request_per_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_factory = SessionFactory()
+    _install_common_patches(monkeypatch, session_factory)
+
+    exit_code = sync_tefas_daily.main(
+        [
+            "--kind",
+            "GYF",
+            "--fund-code",
+            "AB1",
+            "--start-date",
+            "2026-07-01",
+            "--end-date",
+            "2026-07-03",
+        ]
+    )
+
+    assert exit_code == 0
+    assert len(FakeSyncService.instances[0].calls) == 1
+    assert FakeSyncService.instances[0].calls[0]["start_date"] == date(2026, 7, 1)
+    assert FakeSyncService.instances[0].calls[0]["end_date"] == date(2026, 7, 3)
+
+
+def test_one_day_date_behavior_remains_backward_compatible(monkeypatch: pytest.MonkeyPatch) -> None:
+    session_factory = SessionFactory()
+    _install_common_patches(monkeypatch, session_factory)
+
+    exit_code = sync_tefas_daily.main(["--kind", "YAT", "--date", "2026-04-24"])
+
+    assert exit_code == 0
+    assert FakeSyncService.instances[0].calls == [
+        {
+            "start_date": date(2026, 4, 24),
+            "end_date": date(2026, 4, 24),
+            "fund_kind": "YAT",
+            "fund_code": None,
+        }
+    ]
+
+
+@pytest.mark.parametrize("fund_kind", ["YAT", "EMK", "BYF", "GYF", "GSYF"])
+def test_all_canonical_fund_kinds_are_accepted(fund_kind: str) -> None:
+    parser = sync_tefas_daily.build_parser()
+
+    args = parser.parse_args(["--kind", fund_kind, "--date", "2026-04-24"])
+
+    assert args.kind == fund_kind
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--kind", "GYF", "--fund-code", "AB1", "--start-date", "2026-07-01"],
+        ["--kind", "GYF", "--fund-code", "AB1", "--end-date", "2026-08-11"],
+        [
+            "--kind",
+            "GYF",
+            "--fund-code",
+            "AB1",
+            "--start-date",
+            "2026-08-11",
+            "--end-date",
+            "2026-07-01",
+        ],
+        [
+            "--kind",
+            "GYF",
+            "--fund-code",
+            "AB1",
+            "--date",
+            "2026-08-11",
+            "--start-date",
+            "2026-07-01",
+            "--end-date",
+            "2026-08-11",
+        ],
+        ["--kind", "GYF", "--start-date", "2026-07-01", "--end-date", "2026-08-11"],
+        ["--kind", "GYF", "--fund-code", "   ", "--start-date", "2026-07-01", "--end-date", "2026-08-11"],
+        ["--kind", "GYF", "--fund-code", "AB1", "--start-date", "2026-07-32", "--end-date", "2026-08-11"],
+        ["--kind", "GYF"],
+    ],
+)
+def test_validation_failures_happen_before_sessions_or_sync(
+    arguments: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_factory = SessionFactory()
+    monkeypatch.setattr(sync_tefas_daily, "SessionLocal", session_factory)
+    monkeypatch.setattr(sync_tefas_daily, "TefasSyncService", FakeSyncService)
+    monkeypatch.setattr(sync_tefas_daily, "TefasFetchLogService", FakeTefasFetchLogService)
+
+    with pytest.raises(SystemExit) as exc_info:
+        sync_tefas_daily.main(arguments)
+
+    assert exc_info.value.code == 2
+    assert session_factory.sessions == []
+    assert FakeSyncService.instances == []
+    assert FakeTefasFetchLogService.instances == []
+
+
+def test_successful_range_output_includes_scope_and_counters(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session_factory = SessionFactory()
+    FakeSyncService.result = TefasSyncResult(
+        fetched_rows=18,
+        assets_created=0,
+        assets_updated=1,
+        daily_rows_created=17,
+        daily_rows_updated=1,
+    )
+    _install_common_patches(monkeypatch, session_factory)
+
+    exit_code = sync_tefas_daily.main(
+        [
+            "--kind",
+            "GYF",
+            "--fund-code",
+            "AB1",
+            "--start-date",
+            "2026-07-01",
+            "--end-date",
+            "2026-08-11",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "TEFAS sync completed successfully" in captured.out
+    assert "start date: 2026-07-01" in captured.out
+    assert "end date: 2026-08-11" in captured.out
+    assert "fund kind: GYF" in captured.out
+    assert "fund code: AB1" in captured.out
+    assert "fetched_rows: 18" in captured.out
+    assert "assets_created: 0" in captured.out
+    assert "assets_updated: 1" in captured.out
+    assert "daily_rows_created: 17" in captured.out
+    assert "daily_rows_updated: 1" in captured.out
+
+
+def test_range_service_exception_marks_fetch_log_failed_and_returns_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    session_factory = SessionFactory()
+    FakeSyncService.error = RuntimeError("range sync failed")
+    _install_common_patches(monkeypatch, session_factory)
+
+    exit_code = sync_tefas_daily.main(
+        [
+            "--kind",
+            "GYF",
+            "--fund-code",
+            "AB1",
+            "--start-date",
+            "2026-07-01",
+            "--end-date",
+            "2026-08-11",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert FakeTefasFetchLogService.instances[0].mark_success_calls == []
+    assert FakeTefasFetchLogService.instances[0].mark_failed_calls == [
+        {
+            "fetch_log_id": 123,
+            "error_message": "range sync failed",
+            "completed_at": COMPLETED_AT,
+        }
+    ]
+    assert "TEFAS sync failed: range sync failed" in captured.err
+
+
+def test_range_fetch_log_uses_truthful_start_and_end_dates(monkeypatch: pytest.MonkeyPatch) -> None:
+    session_factory = SessionFactory()
+    _install_common_patches(monkeypatch, session_factory)
+
+    exit_code = sync_tefas_daily.main(
+        [
+            "--kind",
+            "GYF",
+            "--fund-code",
+            "AB1",
+            "--start-date",
+            "2026-07-01",
+            "--end-date",
+            "2026-08-11",
+        ]
+    )
+
+    assert exit_code == 0
+    assert FakeTefasFetchLogService.instances[0].start_calls == [
+        {
+            "fund_kind": "GYF",
+            "fund_code": "AB1",
+            "start_date": date(2026, 7, 1),
+            "end_date": date(2026, 8, 11),
+            "started_at": STARTED_AT,
+        }
+    ]
