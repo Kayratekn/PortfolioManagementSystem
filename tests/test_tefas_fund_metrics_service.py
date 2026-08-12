@@ -20,12 +20,13 @@ def _create_asset(
     *,
     asset_code: str = "AAL",
     data_source: str = "TEFAS",
+    fund_kind: str = "YAT",
 ) -> Asset:
     asset = Asset(
         asset_code=asset_code,
         asset_name=f"{asset_code} Fund",
         asset_type="FUND",
-        fund_kind="YAT",
+        fund_kind=fund_kind,
         data_source=data_source,
     )
     db_session.add(asset)
@@ -42,6 +43,7 @@ def _add_daily_data(
     shares_outstanding: Decimal | None = Decimal("1000"),
     investor_count: int | None = 100,
     portfolio_size: Decimal | None = Decimal("10000"),
+    exchange_bulletin_price: Decimal | None = None,
 ) -> TefasFundDailyData:
     row = TefasFundDailyData(
         asset_id=asset_id,
@@ -50,7 +52,7 @@ def _add_daily_data(
         shares_outstanding=shares_outstanding,
         investor_count=investor_count,
         portfolio_size=portfolio_size,
-        exchange_bulletin_price=None,
+        exchange_bulletin_price=exchange_bulletin_price,
     )
     db_session.add(row)
     db_session.flush()
@@ -486,6 +488,259 @@ def test_january_calendar_month_subtraction_uses_previous_december(db_session: S
     assert result.one_month_return_ratio == Decimal("0.1")
     assert result.one_month_baseline_date == date(2025, 12, 31)
 
+
+def test_byf_successful_exchange_bulletin_daily_return(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        exchange_bulletin_price=Decimal("102"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_daily_return_ratio == Decimal("0.02")
+    assert result.byf_exchange_bulletin_daily_return_baseline_date == date(2026, 8, 10)
+
+
+def test_byf_daily_return_uses_previous_available_observation(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 7),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        exchange_bulletin_price=Decimal("103"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.previous_observation_date == date(2026, 8, 7)
+    assert result.daily_return_baseline_date == date(2026, 8, 7)
+    assert result.byf_exchange_bulletin_daily_return_baseline_date == date(2026, 8, 7)
+    assert result.byf_exchange_bulletin_daily_return_ratio == Decimal("0.03")
+
+
+def test_byf_current_exchange_bulletin_null_keeps_baseline_date(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        exchange_bulletin_price=None,
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_daily_return_ratio is None
+    assert result.byf_exchange_bulletin_daily_return_baseline_date == date(2026, 8, 10)
+    assert result.byf_exchange_bulletin_price_to_price_ratio is None
+
+
+def test_byf_previous_exchange_bulletin_null_keeps_baseline_date(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        exchange_bulletin_price=None,
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        exchange_bulletin_price=Decimal("102"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_daily_return_ratio is None
+    assert result.byf_exchange_bulletin_daily_return_baseline_date == date(2026, 8, 10)
+
+
+def test_byf_previous_exchange_bulletin_zero_keeps_baseline_date(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        exchange_bulletin_price=Decimal("0"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        exchange_bulletin_price=Decimal("102"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_daily_return_ratio is None
+    assert result.byf_exchange_bulletin_daily_return_baseline_date == date(2026, 8, 10)
+
+
+def test_byf_current_exchange_bulletin_zero_with_positive_baseline_is_negative_one(
+    db_session: Session,
+) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        exchange_bulletin_price=Decimal("0"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_daily_return_ratio == Decimal("-1")
+    assert result.byf_exchange_bulletin_price_to_price_ratio == Decimal("-1")
+
+
+def test_byf_exchange_bulletin_price_to_price_ratio_positive_case(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        price=Decimal("100"),
+        exchange_bulletin_price=Decimal("101"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_price_to_price_ratio == Decimal("0.01")
+
+
+def test_byf_exchange_bulletin_below_price_produces_negative_ratio(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        price=Decimal("100"),
+        exchange_bulletin_price=Decimal("99"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_price_to_price_ratio == Decimal("-0.01")
+
+
+def test_byf_current_price_zero_sets_price_to_price_ratio_none(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        price=Decimal("0"),
+        exchange_bulletin_price=Decimal("100"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_price_to_price_ratio is None
+
+
+def test_non_byf_with_exchange_bulletin_price_keeps_all_byf_fields_none(
+    db_session: Session,
+) -> None:
+    asset = _create_asset(db_session, fund_kind="YAT")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        exchange_bulletin_price=Decimal("102"),
+    )
+
+    result = _metrics(db_session)
+
+    assert result.byf_exchange_bulletin_daily_return_ratio is None
+    assert result.byf_exchange_bulletin_daily_return_baseline_date is None
+    assert result.byf_exchange_bulletin_price_to_price_ratio is None
+
+
+def test_byf_fields_do_not_alter_generic_metrics(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    for item_date, price in [
+        (date(2026, 7, 11), Decimal("100")),
+        (date(2026, 8, 1), Decimal("100")),
+        (date(2026, 8, 4), Decimal("110")),
+        (date(2026, 8, 5), Decimal("120")),
+        (date(2026, 8, 6), Decimal("130")),
+        (date(2026, 8, 10), Decimal("100")),
+        (date(2026, 8, 11), Decimal("110")),
+    ]:
+        _add_daily_data(
+            db_session,
+            asset_id=asset.id,
+            data_date=item_date,
+            price=price,
+            exchange_bulletin_price=price * Decimal("2"),
+        )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.daily_return_ratio == Decimal("0.1")
+    assert result.daily_return_baseline_date == date(2026, 8, 10)
+    assert result.five_observation_return_ratio == Decimal("0.1")
+    assert result.five_observation_baseline_date == date(2026, 8, 1)
+    assert result.one_month_return_ratio == Decimal("0.1")
+    assert result.one_month_baseline_date == date(2026, 7, 11)
+    assert result.byf_exchange_bulletin_daily_return_ratio == Decimal("0.1")
+
+
+def test_byf_decimal_calculations_do_not_use_float_artifacts(db_session: Session) -> None:
+    asset = _create_asset(db_session, asset_code="BLH", fund_kind="BYF")
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        exchange_bulletin_price=Decimal("0.1"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        price=Decimal("0.1"),
+        exchange_bulletin_price=Decimal("0.3"),
+    )
+
+    result = _metrics(db_session, fund_code="BLH")
+
+    assert result.byf_exchange_bulletin_daily_return_ratio == Decimal("2")
+    assert result.byf_exchange_bulletin_price_to_price_ratio == Decimal("2")
+    assert isinstance(result.byf_exchange_bulletin_daily_return_ratio, Decimal)
+    assert "2.999999" not in str(result.byf_exchange_bulletin_daily_return_ratio)
 def test_fund_code_normalization(db_session: Session) -> None:
     asset = _create_asset(db_session, asset_code="AB1")
     _add_daily_data(db_session, asset_id=asset.id, data_date=date(2026, 8, 11))
