@@ -1,4 +1,4 @@
-﻿from . import asset, portfolio, tefas_fetch_log, tefas_fund_allocation_data, tefas_fund_daily_data, user
+from . import asset, portfolio, tefas_fetch_log, tefas_fund_allocation_data, tefas_fund_daily_data, tefas_fund_type_history, user
 
 __all__ = [
     "asset",
@@ -6,5 +6,6 @@ __all__ = [
     "tefas_fetch_log",
     "tefas_fund_allocation_data",
     "tefas_fund_daily_data",
+    "tefas_fund_type_history",
     "user",
 ]
