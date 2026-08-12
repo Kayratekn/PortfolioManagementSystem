@@ -31,3 +31,7 @@ class TefasFundMetricsResponse(BaseModel):
     average_aum_per_investor: Decimal | None
 
     shares_outstanding_change: Decimal | None
+
+    byf_exchange_bulletin_daily_return_ratio: Decimal | None
+    byf_exchange_bulletin_daily_return_baseline_date: date | None
+    byf_exchange_bulletin_price_to_price_ratio: Decimal | None

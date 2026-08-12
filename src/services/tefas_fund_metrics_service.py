@@ -117,6 +117,23 @@ class TefasFundMetricsService:
             else None
         )
 
+        is_byf = asset.fund_kind == "BYF"
+        byf_exchange_bulletin_daily_return_ratio = (
+            _return_ratio(
+                current.exchange_bulletin_price,
+                previous.exchange_bulletin_price,
+            )
+            if is_byf and previous
+            else None
+        )
+        byf_exchange_bulletin_daily_return_baseline_date = (
+            previous.data_date if is_byf and previous else None
+        )
+        byf_exchange_bulletin_price_to_price_ratio = (
+            _return_ratio(current.exchange_bulletin_price, current.price)
+            if is_byf
+            else None
+        )
         return TefasFundMetricsResponse(
             fund_code=asset.asset_code,
             fund_name=asset.asset_name,
@@ -138,6 +155,15 @@ class TefasFundMetricsService:
             aum_growth_ratio=aum_growth_ratio,
             average_aum_per_investor=average_aum_per_investor,
             shares_outstanding_change=shares_outstanding_change,
+            byf_exchange_bulletin_daily_return_ratio=(
+                byf_exchange_bulletin_daily_return_ratio
+            ),
+            byf_exchange_bulletin_daily_return_baseline_date=(
+                byf_exchange_bulletin_daily_return_baseline_date
+            ),
+            byf_exchange_bulletin_price_to_price_ratio=(
+                byf_exchange_bulletin_price_to_price_ratio
+            ),
         )
 
 

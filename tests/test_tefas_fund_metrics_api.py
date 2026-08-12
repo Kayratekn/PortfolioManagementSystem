@@ -59,12 +59,13 @@ def create_tefas_asset(
     *,
     asset_code: str = "AB1",
     asset_name: str = "AB1 GAYRIMENKUL YATIRIM FONU",
+    fund_kind: str = "GYF",
 ) -> Asset:
     asset = Asset(
         asset_code=asset_code,
         asset_name=asset_name,
         asset_type="FUND",
-        fund_kind="GYF",
+        fund_kind=fund_kind,
         currency=None,
         data_source="TEFAS",
         is_active=True,
@@ -84,6 +85,7 @@ def add_daily_data(
     shares_outstanding: Decimal | None = Decimal("1000"),
     investor_count: int | None = 100,
     portfolio_size: Decimal | None = Decimal("10000"),
+    exchange_bulletin_price: Decimal | None = None,
 ) -> TefasFundDailyData:
     row = TefasFundDailyData(
         asset_id=asset_id,
@@ -92,7 +94,7 @@ def add_daily_data(
         shares_outstanding=shares_outstanding,
         investor_count=investor_count,
         portfolio_size=portfolio_size,
-        exchange_bulletin_price=None,
+        exchange_bulletin_price=exchange_bulletin_price,
     )
     db_session.add(row)
     return row
@@ -257,6 +259,109 @@ def test_unavailable_metric_serializes_as_null(client, db_session: Session) -> N
     assert body["one_month_return_ratio"] is None
 
 
+
+def test_authenticated_byf_metrics_response_exposes_byf_fields(client, db_session: Session) -> None:
+    token = create_authenticated_user(client)
+    asset = create_tefas_asset(
+        db_session,
+        asset_code="BLH",
+        asset_name="BLH BYF",
+        fund_kind="BYF",
+    )
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        price=Decimal("100"),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        price=Decimal("100"),
+        exchange_bulletin_price=Decimal("102"),
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/tefas/funds/BLH/metrics?date=2026-08-11",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["byf_exchange_bulletin_daily_return_ratio"] == "0.02"
+    assert body["byf_exchange_bulletin_daily_return_baseline_date"] == "2026-08-10"
+    assert body["byf_exchange_bulletin_price_to_price_ratio"] == "0.02"
+
+
+def test_byf_null_values_serialize_as_null(client, db_session: Session) -> None:
+    token = create_authenticated_user(client)
+    asset = create_tefas_asset(
+        db_session,
+        asset_code="BLH",
+        asset_name="BLH BYF",
+        fund_kind="BYF",
+    )
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        price=Decimal("100"),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        price=Decimal("100"),
+        exchange_bulletin_price=None,
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/tefas/funds/BLH/metrics?date=2026-08-11",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["byf_exchange_bulletin_daily_return_ratio"] is None
+    assert body["byf_exchange_bulletin_daily_return_baseline_date"] == "2026-08-10"
+    assert body["byf_exchange_bulletin_price_to_price_ratio"] is None
+
+
+def test_non_byf_response_contains_byf_fields_as_null(client, db_session: Session) -> None:
+    token = create_authenticated_user(client)
+    asset = create_tefas_asset(db_session)
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 10),
+        price=Decimal("100"),
+        exchange_bulletin_price=Decimal("100"),
+    )
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        price=Decimal("101"),
+        exchange_bulletin_price=Decimal("102"),
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/tefas/funds/AB1/metrics?date=2026-08-11",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["daily_return_ratio"] == "0.01"
+    assert body["byf_exchange_bulletin_daily_return_ratio"] is None
+    assert body["byf_exchange_bulletin_daily_return_baseline_date"] is None
+    assert body["byf_exchange_bulletin_price_to_price_ratio"] is None
 def test_lowercase_path_resolves_canonical_fund_code(client, db_session: Session) -> None:
     token = create_authenticated_user(client)
     asset = create_tefas_asset(db_session)
