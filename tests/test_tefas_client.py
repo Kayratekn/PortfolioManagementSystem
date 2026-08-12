@@ -284,3 +284,24 @@ def test_invalid_constructor_values_raise_value_error(kwargs: dict[str, Any], ex
 
     with pytest.raises(ValueError, match=expected_message):
         CustomTefasClient(**constructor_kwargs)
+
+
+def test_fetch_fund_profile_detail_posts_expected_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _install_fake_client(monkeypatch, [_make_response(200, {"ok": True})])
+    client = CustomTefasClient(
+        base_url="https://example.test",
+        timeout_seconds=5,
+        max_retries=0,
+        retry_wait_seconds=0,
+    )
+
+    result = client.fetch_fund_profile_detail(fund_code=" aal ")
+
+    assert result == {"ok": True}
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://example.test/api/funds/fonProfilDtyGetir"
+    assert calls[0]["json"] == {
+        "dil": "TR",
+        "fonKodu": "AAL",
+        "periyod": "12",
+    }
