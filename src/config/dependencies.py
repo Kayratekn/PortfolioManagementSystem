@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections.abc import Generator
 from typing import Annotated
@@ -12,9 +12,11 @@ from src.config.settings import get_settings
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
+from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
 from src.repositories.user_repository import UserRepository
 from src.services.portfolio_service import PortfolioService
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
+from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.token_service import TokenService
 from src.services.user_service import UserService
 
@@ -42,6 +44,12 @@ def get_tefas_fund_allocation_data_repository(
     db: Annotated[Session, Depends(get_db)],
 ) -> TefasFundAllocationDataRepository:
     return TefasFundAllocationDataRepository(db)
+
+
+def get_tefas_fund_daily_data_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> TefasFundDailyDataRepository:
+    return TefasFundDailyDataRepository(db)
 
 
 def get_token_service() -> TokenService:
@@ -75,6 +83,19 @@ def get_tefas_fund_allocation_read_service(
     return TefasFundAllocationReadService(
         asset_repository=asset_repository,
         allocation_repository=allocation_repository,
+    )
+
+
+def get_tefas_fund_metrics_service(
+    asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
+    daily_data_repository: Annotated[
+        TefasFundDailyDataRepository,
+        Depends(get_tefas_fund_daily_data_repository),
+    ],
+) -> TefasFundMetricsService:
+    return TefasFundMetricsService(
+        asset_repository=asset_repository,
+        daily_data_repository=daily_data_repository,
     )
 
 
