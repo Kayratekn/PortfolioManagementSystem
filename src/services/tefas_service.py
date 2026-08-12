@@ -41,6 +41,15 @@ class TefasPortfolioBreakdownSnapshot:
     allocations: tuple[TefasPortfolioAllocationItem, ...]
 
 
+
+@dataclass(frozen=True)
+class TefasFundTypeResult:
+    fund_code: str
+    fund_type_name: str
+    raw_field_name: str = "fonTuru"
+    source_endpoint: str = "fonProfilDtyGetir"
+
+
 class TefasService:
     """Coordinates TEFAS requests and normalizes returned data."""
 
@@ -147,6 +156,48 @@ class TefasService:
 
         rows = self._extract_result_list(response)
         return self._filter_rows_by_fund_code(rows=rows, fund_code=fund_code)
+
+    def get_fund_type(self, *, fund_code: str) -> TefasFundTypeResult:
+        """Return the selected fund's source-oriented fonTuru value."""
+
+        normalized_fund_code = self._normalize_required_string(
+            fund_code,
+            field_name="fund_code",
+            uppercase=True,
+        )
+        response = self.client.fetch_fund_profile_detail(
+            fund_code=normalized_fund_code,
+        )
+        rows = self._extract_result_list(response)
+        matching_rows = [
+            row
+            for row in rows
+            if isinstance(row.get("fonKodu"), str)
+            and row["fonKodu"].strip().casefold() == normalized_fund_code.casefold()
+        ]
+
+        if not matching_rows:
+            raise TefasServiceError(
+                f"TEFAS fund profile row not found: fund_code={normalized_fund_code}"
+            )
+
+        if len(matching_rows) > 1:
+            raise TefasServiceError(
+                f"Duplicate TEFAS fund profile rows: fund_code={normalized_fund_code}"
+            )
+
+        row = matching_rows[0]
+        return TefasFundTypeResult(
+            fund_code=self._normalize_required_string(
+                row.get("fonKodu"),
+                field_name="fund_code",
+                uppercase=True,
+            ),
+            fund_type_name=self._normalize_required_string(
+                row.get("fonTuru"),
+                field_name="fund_type_name",
+            ),
+        )
 
     def normalize_portfolio_breakdown_row(
         self,

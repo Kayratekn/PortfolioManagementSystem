@@ -14,15 +14,22 @@ class FakeTefasClient:
         self,
         response: dict[str, Any],
         portfolio_response: dict[str, Any] | None = None,
+        profile_response: dict[str, Any] | None = None,
     ) -> None:
         self.response = response
         self.portfolio_response = portfolio_response if portfolio_response is not None else response
+        self.profile_response = profile_response if profile_response is not None else response
+        self.profile_detail_calls: list[dict[str, Any]] = []
 
     def fetch_general_info(self, **kwargs: Any) -> dict[str, Any]:
         return self.response
 
     def fetch_portfolio_breakdown(self, **kwargs: Any) -> dict[str, Any]:
         return self.portfolio_response
+
+    def fetch_fund_profile_detail(self, **kwargs: Any) -> dict[str, Any]:
+        self.profile_detail_calls.append(kwargs)
+        return self.profile_response
 
 
 
@@ -839,3 +846,144 @@ def test_fetch_general_info_rejects_conflicting_duplicate_provider_rows() -> Non
             fund_kind="GYF",
             fund_code="AB1",
         )
+
+
+def _build_profile_row(
+    *,
+    fund_code: str,
+    fund_type_name: object = "Para Piyasasi Semsiye Fonu",
+) -> dict[str, object]:
+    return {
+        "fonKodu": fund_code,
+        "fonUnvan": f"{fund_code} Fund",
+        "fonTuru": fund_type_name,
+        "fonTurGetiri": "0.1",
+    }
+
+
+def _profile_response(rows: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "errorCode": None,
+        "errorMessage": None,
+        "resultList": rows,
+    }
+
+
+def _service_with_profile_rows(rows: list[dict[str, object]]) -> tuple[TefasService, FakeTefasClient]:
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        profile_response=_profile_response(rows),
+    )
+    return TefasService(client=fake_client), fake_client  # type: ignore[arg-type]
+
+
+def test_get_fund_type_selects_aal_style_requested_row() -> None:
+    service, fake_client = _service_with_profile_rows([
+        _build_profile_row(fund_code="ALTIN", fund_type_name="ALTIN"),
+        _build_profile_row(fund_code="AAL", fund_type_name="Para Piyasasi Semsiye Fonu"),
+    ])
+
+    result = service.get_fund_type(fund_code="AAL")
+
+    assert result.fund_code == "AAL"
+    assert result.fund_type_name == "Para Piyasasi Semsiye Fonu"
+    assert result.raw_field_name == "fonTuru"
+    assert result.source_endpoint == "fonProfilDtyGetir"
+    assert fake_client.profile_detail_calls == [{"fund_code": "AAL"}]
+
+
+def test_get_fund_type_selects_blh_style_requested_row() -> None:
+    service, _ = _service_with_profile_rows([
+        _build_profile_row(fund_code="BLH", fund_type_name="Hisse Senedi Yogun"),
+        _build_profile_row(fund_code="BIST100", fund_type_name="BIST100"),
+    ])
+
+    result = service.get_fund_type(fund_code="BLH")
+
+    assert result.fund_code == "BLH"
+    assert result.fund_type_name == "Hisse Senedi Yogun"
+
+
+def test_get_fund_type_selects_ab1_style_requested_row() -> None:
+    service, _ = _service_with_profile_rows([
+        _build_profile_row(fund_code="AB1", fund_type_name="Gayrimenkul Yatirim Fonlari"),
+        _build_profile_row(fund_code="EUR", fund_type_name="EUR"),
+    ])
+
+    result = service.get_fund_type(fund_code="AB1")
+
+    assert result.fund_code == "AB1"
+    assert result.fund_type_name == "Gayrimenkul Yatirim Fonlari"
+
+
+def test_get_fund_type_ignores_comparator_rows_before_and_after_requested_row() -> None:
+    service, _ = _service_with_profile_rows([
+        _build_profile_row(fund_code="ALTIN", fund_type_name="ALTIN"),
+        _build_profile_row(fund_code="BIST100", fund_type_name="BIST100"),
+        _build_profile_row(fund_code="BLH", fund_type_name="Hisse Senedi Yogun"),
+        _build_profile_row(fund_code="EUR", fund_type_name="EUR"),
+    ])
+
+    result = service.get_fund_type(fund_code="BLH")
+
+    assert result.fund_code == "BLH"
+    assert result.fund_type_name == "Hisse Senedi Yogun"
+
+
+def test_get_fund_type_matches_requested_code_case_insensitively_with_whitespace() -> None:
+    service, fake_client = _service_with_profile_rows([
+        _build_profile_row(fund_code=" aal ", fund_type_name=" Para Piyasasi Semsiye Fonu "),
+    ])
+
+    result = service.get_fund_type(fund_code=" aal ")
+
+    assert result.fund_code == "AAL"
+    assert result.fund_type_name == "Para Piyasasi Semsiye Fonu"
+    assert fake_client.profile_detail_calls == [{"fund_code": "AAL"}]
+
+
+def test_get_fund_type_raises_when_requested_row_is_absent() -> None:
+    service, _ = _service_with_profile_rows([
+        _build_profile_row(fund_code="ALTIN", fund_type_name="ALTIN"),
+    ])
+
+    with pytest.raises(TefasServiceError, match="not found"):
+        service.get_fund_type(fund_code="AAL")
+
+
+def test_get_fund_type_raises_on_duplicate_requested_rows() -> None:
+    service, _ = _service_with_profile_rows([
+        _build_profile_row(fund_code="AAL", fund_type_name="Para Piyasasi Semsiye Fonu"),
+        _build_profile_row(fund_code=" aal ", fund_type_name="Para Piyasasi Semsiye Fonu"),
+    ])
+
+    with pytest.raises(TefasServiceError, match="Duplicate"):
+        service.get_fund_type(fund_code="AAL")
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"fonKodu": "AAL", "fonUnvan": "AAL Fund"},
+        _build_profile_row(fund_code="AAL", fund_type_name=None),
+        _build_profile_row(fund_code="AAL", fund_type_name=""),
+        _build_profile_row(fund_code="AAL", fund_type_name="   "),
+        _build_profile_row(fund_code="AAL", fund_type_name=123),
+    ],
+)
+def test_get_fund_type_raises_on_invalid_fon_turu(row: dict[str, object]) -> None:
+    service, _ = _service_with_profile_rows([row])
+
+    with pytest.raises(TefasServiceError, match="fund_type_name"):
+        service.get_fund_type(fund_code="AAL")
+
+
+def test_get_fund_type_uses_only_mocked_client_without_database_or_network() -> None:
+    service, fake_client = _service_with_profile_rows([
+        _build_profile_row(fund_code="AAL", fund_type_name="Para Piyasasi Semsiye Fonu"),
+    ])
+
+    result = service.get_fund_type(fund_code="AAL")
+
+    assert result.fund_type_name == "Para Piyasasi Semsiye Fonu"
+    assert fake_client.profile_detail_calls == [{"fund_code": "AAL"}]

@@ -21,6 +21,7 @@ class CustomTefasClient:
 
     GENERAL_INFO_ENDPOINT = "/api/funds/fonGnlBlgSiraliGetir"
     PORTFOLIO_BREAKDOWN_ENDPOINT = "/api/funds/dagilimSiraliGetirT"
+    FUND_PROFILE_DETAIL_ENDPOINT = "/api/funds/fonProfilDtyGetir"
 
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -99,6 +100,24 @@ class CustomTefasClient:
 
         return self._post_json(
             endpoint=self.PORTFOLIO_BREAKDOWN_ENDPOINT,
+            payload=payload,
+        )
+
+    def fetch_fund_profile_detail(
+        self,
+        *,
+        fund_code: str,
+    ) -> dict[str, Any]:
+        """Fetch source-oriented fund type/classification details from TEFAS."""
+
+        payload = {
+            "dil": "TR",
+            "fonKodu": fund_code.strip().upper(),
+            "periyod": "12",
+        }
+
+        return self._post_json(
+            endpoint=self.FUND_PROFILE_DETAIL_ENDPOINT,
             payload=payload,
         )
 
