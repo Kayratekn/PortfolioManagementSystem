@@ -14,14 +14,17 @@ from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyData
 TEFAS_DATA_DATE = date(2026, 4, 24)
 
 
-def _build_asset() -> Asset:
-    return Asset(
-        asset_code="AAL",
-        asset_name="Example Fund",
-        asset_type="FUND",
-        fund_kind="YAT",
-        data_source="TEFAS",
-    )
+def _build_asset(**overrides: object) -> Asset:
+    values = {
+        "asset_code": "AAL",
+        "asset_name": "Example Fund",
+        "asset_type": "FUND",
+        "fund_kind": "YAT",
+        "data_source": "TEFAS",
+        "is_active": True,
+    }
+    values.update(overrides)
+    return Asset(**values)
 
 
 def _build_daily_data(*, asset_id: int) -> TefasFundDailyData:
@@ -71,6 +74,80 @@ def test_asset_repository_get_by_source_and_code_returns_none_when_missing(db_se
     )
 
     assert result is None
+
+
+
+def test_asset_repository_list_active_by_data_source_returns_active_tefas_asset(db_session: Session) -> None:
+    repository = AssetRepository(db_session)
+    asset = _build_asset(asset_code="AAL", data_source="TEFAS", is_active=True)
+    repository.add(asset)
+
+    result = repository.list_active_by_data_source("TEFAS")
+
+    assert [item.asset_code for item in result] == ["AAL"]
+
+
+
+def test_asset_repository_list_active_by_data_source_skips_inactive_tefas_asset(db_session: Session) -> None:
+    repository = AssetRepository(db_session)
+    repository.add(_build_asset(asset_code="AAL", data_source="TEFAS", is_active=False))
+
+    result = repository.list_active_by_data_source("TEFAS")
+
+    assert result == []
+
+
+
+def test_asset_repository_list_active_by_data_source_skips_active_non_tefas_asset(db_session: Session) -> None:
+    repository = AssetRepository(db_session)
+    repository.add(_build_asset(asset_code="AAL", data_source="MANUAL", is_active=True))
+
+    result = repository.list_active_by_data_source("TEFAS")
+
+    assert result == []
+
+
+
+def test_asset_repository_list_active_by_data_source_orders_by_asset_code(db_session: Session) -> None:
+    repository = AssetRepository(db_session)
+    repository.add(_build_asset(asset_code="BLH"))
+    repository.add(_build_asset(asset_code="AAL"))
+    repository.add(_build_asset(asset_code="AB1"))
+
+    result = repository.list_active_by_data_source("TEFAS")
+
+    assert [asset.asset_code for asset in result] == ["AAL", "AB1", "BLH"]
+
+
+
+def test_asset_repository_list_active_by_data_source_includes_missing_fund_kind(db_session: Session) -> None:
+    repository = AssetRepository(db_session)
+    repository.add(_build_asset(asset_code="AAL", fund_kind=None, data_source="TEFAS", is_active=True))
+
+    result = repository.list_active_by_data_source("TEFAS")
+
+    assert [asset.asset_code for asset in result] == ["AAL"]
+    assert result[0].fund_kind is None
+
+
+
+def test_asset_repository_list_active_by_data_source_does_not_commit(
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    repository = AssetRepository(db_session)
+    repository.add(_build_asset(asset_code="AAL"))
+    commit_calls = 0
+
+    def counting_commit() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+
+    monkeypatch.setattr(db_session, "commit", counting_commit)
+
+    repository.list_active_by_data_source("TEFAS")
+
+    assert commit_calls == 0
 
 
 
