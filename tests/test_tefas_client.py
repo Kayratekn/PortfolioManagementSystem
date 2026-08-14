@@ -37,6 +37,19 @@ class FakeHttpxClient:
             raise outcome
         return outcome
 
+    def get(self, url: str, **kwargs: Any) -> Any:
+        self.calls.append(
+            {
+                "url": url,
+                **kwargs,
+                "client_kwargs": self.kwargs,
+            }
+        )
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
 
 class FakeJsonErrorResponse:
     def __init__(self) -> None:
@@ -305,3 +318,71 @@ def test_fetch_fund_profile_detail_posts_expected_payload(monkeypatch: pytest.Mo
         "fonKodu": "AAL",
         "periyod": "12",
     }
+
+def _make_text_response(status_code: int, text: str) -> httpx.Response:
+    return httpx.Response(
+        status_code=status_code,
+        text=text,
+        request=httpx.Request("GET", "https://example.test/tr/fon-detayli-analiz/AAL"),
+    )
+
+
+def test_fetch_fund_detail_analysis_page_gets_expected_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _install_fake_client(monkeypatch, [_make_text_response(200, "<html>ok</html>")])
+    client = CustomTefasClient(
+        base_url="https://example.test",
+        timeout_seconds=5,
+        max_retries=0,
+        retry_wait_seconds=0,
+    )
+
+    result = client.fetch_fund_detail_analysis_page(fund_code=" aal ")
+
+    assert result == "<html>ok</html>"
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://example.test/tr/fon-detayli-analiz/AAL"
+    assert "headers" not in calls[0]
+    assert "json" not in calls[0]
+
+
+def test_fetch_fund_detail_analysis_page_retries_transient_get_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = httpx.Request("GET", "https://example.test/tr/fon-detayli-analiz/AAL")
+    outcomes = [
+        httpx.RequestError("temporary network error", request=request),
+        _make_text_response(200, "<html>ok</html>"),
+    ]
+    calls = _install_fake_client(monkeypatch, outcomes)
+    sleep_calls = _install_fake_sleep(monkeypatch)
+    client = CustomTefasClient(
+        base_url="https://example.test",
+        timeout_seconds=5,
+        max_retries=1,
+        retry_wait_seconds=2,
+    )
+
+    result = client.fetch_fund_detail_analysis_page(fund_code="AAL")
+
+    assert result == "<html>ok</html>"
+    assert len(calls) == 2
+    assert sleep_calls == [2]
+
+
+def test_fetch_fund_detail_analysis_page_http_404_is_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _install_fake_client(monkeypatch, [_make_text_response(404, "not found")])
+    sleep_calls = _install_fake_sleep(monkeypatch)
+    client = CustomTefasClient(
+        base_url="https://example.test",
+        timeout_seconds=5,
+        max_retries=2,
+        retry_wait_seconds=2,
+    )
+
+    with pytest.raises(TefasClientError, match="404"):
+        client.fetch_fund_detail_analysis_page(fund_code="AAL")
+
+    assert len(calls) == 1
+    assert sleep_calls == []

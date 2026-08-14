@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+import json
 from typing import Any
 
 import pytest
@@ -15,11 +16,14 @@ class FakeTefasClient:
         response: dict[str, Any],
         portfolio_response: dict[str, Any] | None = None,
         profile_response: dict[str, Any] | None = None,
+        detail_page_html: str = "",
     ) -> None:
         self.response = response
         self.portfolio_response = portfolio_response if portfolio_response is not None else response
         self.profile_response = profile_response if profile_response is not None else response
+        self.detail_page_html = detail_page_html
         self.profile_detail_calls: list[dict[str, Any]] = []
+        self.detail_page_calls: list[dict[str, Any]] = []
 
     def fetch_general_info(self, **kwargs: Any) -> dict[str, Any]:
         return self.response
@@ -30,6 +34,10 @@ class FakeTefasClient:
     def fetch_fund_profile_detail(self, **kwargs: Any) -> dict[str, Any]:
         self.profile_detail_calls.append(kwargs)
         return self.profile_response
+
+    def fetch_fund_detail_analysis_page(self, **kwargs: Any) -> str:
+        self.detail_page_calls.append(kwargs)
+        return self.detail_page_html
 
 
 
@@ -987,3 +995,269 @@ def test_get_fund_type_uses_only_mocked_client_without_database_or_network() -> 
 
     assert result.fund_type_name == "Para Piyasasi Semsiye Fonu"
     assert fake_client.profile_detail_calls == [{"fund_code": "AAL"}]
+
+def _detail_page_html(bilgi_data_json: str) -> str:
+    return _detail_page_html_with_bilgi_data(bilgi_data_json)
+
+
+def _detail_page_html_with_bilgi_data(*bilgi_data_json_values: str) -> str:
+    scripts = "".join(
+        f'<script>{{"props":{{"pageProps":{{"bilgiData":{bilgi_data_json}}}}}}}</script>'
+        for bilgi_data_json in bilgi_data_json_values
+    )
+    return f"<html><head></head><body>{scripts}</body></html>"
+
+
+def _detail_page_next_f_html(*payload_texts: str) -> str:
+    scripts = "".join(
+        f"<script>self.__next_f.push([1,{json.dumps(payload_text)}]);</script>"
+        for payload_text in payload_texts
+    )
+    return f"<html><head></head><body>{scripts}</body></html>"
+
+
+def _next_f_payload_with_bilgi_data(bilgi_data_json: str) -> str:
+    return f'0:["$","$L1",null,{{"bilgiData":{bilgi_data_json}}}]'
+
+
+def _service_with_detail_page_html(html_text: str) -> tuple[TefasService, FakeTefasClient]:
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        detail_page_html=html_text,
+    )
+    return TefasService(client=fake_client), fake_client  # type: ignore[arg-type]
+
+
+def test_get_fund_detail_page_metadata_parses_aal_bilgi_data() -> None:
+    service, fake_client = _service_with_detail_page_html(
+        _detail_page_html(
+            '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11}'
+        )
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code=" aal ")
+
+    assert result.fund_code == "AAL"
+    assert result.fund_category == "Para Piyasas? Fonu"
+    assert result.category_rank == 71
+    assert result.category_fund_count == 84
+    assert result.market_share_raw == Decimal("0.11")
+    assert result.source_page == "fon-detayli-analiz"
+    assert result.source_field_names == (
+        "fonKodu",
+        "fonKategori",
+        "kategoriDerece",
+        "kategoriFonSay",
+        "pazarPayi",
+    )
+    assert fake_client.detail_page_calls == [{"fund_code": "AAL"}]
+
+
+def test_get_fund_detail_page_metadata_parses_ba1_bilgi_data() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_html(
+            '{"fonKodu":"BA1","fonKategori":"Serbest Fon",'
+            '"kategoriDerece":0,"kategoriFonSay":1340,"pazarPayi":0.01}'
+        )
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="BA1")
+
+    assert result.fund_code == "BA1"
+    assert result.fund_category == "Serbest Fon"
+    assert result.category_rank == 0
+    assert result.category_fund_count == 1340
+    assert result.market_share_raw == Decimal("0.01")
+
+
+def test_get_fund_detail_page_metadata_parses_escaped_next_f_payload() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_next_f_html(
+            _next_f_payload_with_bilgi_data(
+                '{"fonKodu":"AAL","fonKategori":"Para Piyasas\u0131 Fonu",'
+                '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.1100}'
+            )
+        )
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.fund_code == "AAL"
+    assert result.fund_category == "Para Piyasas\u0131 Fonu"
+    assert result.category_rank == 71
+    assert result.category_fund_count == 84
+    assert result.market_share_raw == Decimal("0.1100")
+
+
+def test_get_fund_detail_page_metadata_selects_exact_matching_bilgi_data() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_html_with_bilgi_data(
+            '{"fonKodu":"BA1","fonKategori":"Serbest Fon",'
+            '"kategoriDerece":0,"kategoriFonSay":1340,"pazarPayi":0.01}',
+            '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11}',
+        )
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.fund_code == "AAL"
+    assert result.fund_category == "Para Piyasas? Fonu"
+    assert result.category_rank == 71
+    assert result.category_fund_count == 84
+    assert result.market_share_raw == Decimal("0.11")
+
+
+def test_get_fund_detail_page_metadata_raises_when_no_exact_bilgi_data_match() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_html_with_bilgi_data(
+            '{"fonKodu":"BA1","fonKategori":"Serbest Fon",'
+            '"kategoriDerece":0,"kategoriFonSay":1340,"pazarPayi":0.01}',
+            '{"fonKodu":"BIST100","fonKategori":"Comparator",'
+            '"kategoriDerece":1,"kategoriFonSay":10,"pazarPayi":1.25}',
+        )
+    )
+
+    with pytest.raises(TefasServiceError, match="exact match not found"):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+def test_get_fund_detail_page_metadata_accepts_identical_duplicate_exact_matches() -> None:
+    bilgi_data_json = (
+        '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11}'
+    )
+    service, _ = _service_with_detail_page_html(
+        _detail_page_next_f_html(
+            _next_f_payload_with_bilgi_data(bilgi_data_json),
+            _next_f_payload_with_bilgi_data(bilgi_data_json),
+        )
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.fund_code == "AAL"
+    assert result.category_rank == 71
+    assert result.market_share_raw == Decimal("0.11")
+
+
+def test_get_fund_detail_page_metadata_raises_on_conflicting_duplicate_exact_matches() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_next_f_html(
+            _next_f_payload_with_bilgi_data(
+                '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+                '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11}'
+            ),
+            _next_f_payload_with_bilgi_data(
+                '{"fonKodu":" aal ","fonKategori":"Para Piyasas? Fonu",'
+                '"kategoriDerece":72,"kategoriFonSay":84,"pazarPayi":0.12}'
+            ),
+        )
+    )
+
+    with pytest.raises(TefasServiceError, match="Conflicting"):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+def test_get_fund_detail_page_metadata_raises_when_next_f_payload_has_no_exact_match() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_next_f_html(
+            _next_f_payload_with_bilgi_data(
+                '{"fonKodu":"BA1","fonKategori":"Serbest Fon",'
+                '"kategoriDerece":0,"kategoriFonSay":1340,"pazarPayi":0.01}'
+            )
+        )
+    )
+
+    with pytest.raises(TefasServiceError, match="exact match not found"):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+def test_get_fund_detail_page_metadata_preserves_raw_market_share_scale() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_html(
+            '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.1100}'
+        )
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.market_share_raw == Decimal("0.1100")
+
+
+def test_get_fund_detail_page_metadata_allows_null_optional_numeric_fields() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_html(
+            '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":null,"kategoriFonSay":null,"pazarPayi":null}'
+        )
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.category_rank is None
+    assert result.category_fund_count is None
+    assert result.market_share_raw is None
+
+
+def test_get_fund_detail_page_metadata_raises_when_bilgi_data_missing() -> None:
+    service, _ = _service_with_detail_page_html("<html><script>{}</script></html>")
+
+    with pytest.raises(TefasServiceError, match="bilgiData not found"):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+@pytest.mark.parametrize(
+    "bilgi_data_json",
+    [
+        '{"fonKategori":"Para Piyasas? Fonu","kategoriDerece":71}',
+        '{"fonKodu":"AAL","kategoriDerece":71}',
+        '{"fonKodu":"AAL","fonKategori":"   ","kategoriDerece":71}',
+    ],
+)
+def test_get_fund_detail_page_metadata_requires_identity_and_category(
+    bilgi_data_json: str,
+) -> None:
+    service, _ = _service_with_detail_page_html(_detail_page_html(bilgi_data_json))
+
+    with pytest.raises(TefasServiceError):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+def test_get_fund_detail_page_metadata_rejects_invalid_optional_numeric_fields() -> None:
+    service, _ = _service_with_detail_page_html(
+        _detail_page_html(
+            '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":"bad","kategoriFonSay":84,"pazarPayi":0.11}'
+        )
+    )
+
+    with pytest.raises(TefasServiceError, match="category_rank"):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+@pytest.mark.parametrize(
+    ("field_name", "bilgi_data_json"),
+    [
+        (
+            "category_rank",
+            '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":71.5,"kategoriFonSay":84,"pazarPayi":0.11}',
+        ),
+        (
+            "category_fund_count",
+            '{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":71,"kategoriFonSay":84.5,"pazarPayi":0.11}',
+        ),
+    ],
+)
+def test_get_fund_detail_page_metadata_rejects_non_integral_category_fields(
+    field_name: str,
+    bilgi_data_json: str,
+) -> None:
+    service, _ = _service_with_detail_page_html(_detail_page_html(bilgi_data_json))
+
+    with pytest.raises(TefasServiceError, match=field_name):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
