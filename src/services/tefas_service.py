@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import html as html_module
+import json
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -41,6 +43,24 @@ class TefasPortfolioBreakdownSnapshot:
     allocations: tuple[TefasPortfolioAllocationItem, ...]
 
 
+
+
+
+@dataclass(frozen=True)
+class TefasFundDetailPageMetadataResult:
+    fund_code: str
+    fund_category: str
+    category_rank: int | None
+    category_fund_count: int | None
+    market_share_raw: Decimal | None
+    source_page: str = "fon-detayli-analiz"
+    source_field_names: tuple[str, ...] = (
+        "fonKodu",
+        "fonKategori",
+        "kategoriDerece",
+        "kategoriFonSay",
+        "pazarPayi",
+    )
 
 @dataclass(frozen=True)
 class TefasFundTypeResult:
@@ -157,6 +177,57 @@ class TefasService:
         rows = self._extract_result_list(response)
         return self._filter_rows_by_fund_code(rows=rows, fund_code=fund_code)
 
+    def get_fund_detail_page_metadata(
+        self,
+        *,
+        fund_code: str,
+    ) -> TefasFundDetailPageMetadataResult:
+        """Return source-oriented metadata from the TEFAS detail-analysis page."""
+
+        normalized_fund_code = self._normalize_required_string(
+            fund_code,
+            field_name="fund_code",
+            uppercase=True,
+        )
+        html_text = self.client.fetch_fund_detail_analysis_page(
+            fund_code=normalized_fund_code,
+        )
+        bilgi_data = self._extract_bilgi_data_from_html(
+            html_text=html_text,
+            fund_code=normalized_fund_code,
+        )
+
+        source_fund_code = self._normalize_required_string(
+            bilgi_data.get("fonKodu"),
+            field_name="fund_code",
+            uppercase=True,
+        )
+        if source_fund_code != normalized_fund_code:
+            raise TefasServiceError(
+                "TEFAS detail-analysis page fund code mismatch: "
+                f"requested={normalized_fund_code}, source={source_fund_code}"
+            )
+
+        return TefasFundDetailPageMetadataResult(
+            fund_code=source_fund_code,
+            fund_category=self._normalize_required_string(
+                bilgi_data.get("fonKategori"),
+                field_name="fund_category",
+            ),
+            category_rank=self._normalize_optional_integral_int(
+                bilgi_data.get("kategoriDerece"),
+                field_name="category_rank",
+            ),
+            category_fund_count=self._normalize_optional_integral_int(
+                bilgi_data.get("kategoriFonSay"),
+                field_name="category_fund_count",
+            ),
+            market_share_raw=self._normalize_optional_decimal(
+                bilgi_data.get("pazarPayi"),
+                field_name="market_share_raw",
+            ),
+        )
+
     def get_fund_type(self, *, fund_code: str) -> TefasFundTypeResult:
         """Return the selected fund's source-oriented fonTuru value."""
 
@@ -255,6 +326,180 @@ class TefasService:
             ),
             allocations=tuple(allocations),
         )
+
+    @staticmethod
+    def _extract_bilgi_data_from_html(
+        *,
+        html_text: str,
+        fund_code: str,
+    ) -> dict[str, Any]:
+        if not isinstance(html_text, str) or not html_text:
+            raise TefasServiceError("TEFAS detail-analysis page HTML is empty.")
+
+        bilgi_data_objects: list[dict[str, Any]] = []
+        for candidate_text in TefasService._iter_bilgi_data_candidate_texts(html_text):
+            bilgi_data_objects.extend(
+                TefasService._find_bilgi_data_objects(candidate_text)
+            )
+
+        if not bilgi_data_objects:
+            raise TefasServiceError("TEFAS detail-analysis bilgiData not found.")
+
+        exact_matches: list[dict[str, Any]] = []
+        for bilgi_data in bilgi_data_objects:
+            try:
+                source_fund_code = TefasService._normalize_required_string(
+                    bilgi_data.get("fonKodu"),
+                    field_name="fund_code",
+                    uppercase=True,
+                )
+            except TefasServiceError:
+                continue
+
+            if source_fund_code == fund_code:
+                exact_matches.append(bilgi_data)
+
+        if not exact_matches:
+            raise TefasServiceError(
+                f"TEFAS detail-analysis bilgiData exact match not found: fund_code={fund_code}"
+            )
+
+        first_match_key = TefasService._build_bilgi_data_comparison_key(exact_matches[0])
+        if any(
+            TefasService._build_bilgi_data_comparison_key(match) != first_match_key
+            for match in exact_matches[1:]
+        ):
+            raise TefasServiceError(
+                f"Conflicting TEFAS detail-analysis bilgiData exact matches: fund_code={fund_code}"
+            )
+
+        return exact_matches[0]
+
+    @staticmethod
+    def _iter_bilgi_data_candidate_texts(html_text: str) -> list[str]:
+        candidate_texts = [html_text]
+        unescaped_html_text = html_module.unescape(html_text)
+        if unescaped_html_text != html_text:
+            candidate_texts.append(unescaped_html_text)
+
+        for candidate_text in list(candidate_texts):
+            for payload_text in TefasService._extract_next_f_push_strings(candidate_text):
+                candidate_texts.append(payload_text)
+                unescaped_payload_text = html_module.unescape(payload_text)
+                if unescaped_payload_text != payload_text:
+                    candidate_texts.append(unescaped_payload_text)
+
+        return candidate_texts
+
+    @staticmethod
+    def _extract_next_f_push_strings(candidate_text: str) -> list[str]:
+        marker = "self.__next_f.push("
+        decoder = json.JSONDecoder(parse_float=Decimal)
+        payload_strings: list[str] = []
+        search_start = 0
+
+        while True:
+            marker_index = candidate_text.find(marker, search_start)
+            if marker_index == -1:
+                return payload_strings
+
+            json_start_index = marker_index + len(marker)
+            while (
+                json_start_index < len(candidate_text)
+                and candidate_text[json_start_index].isspace()
+            ):
+                json_start_index += 1
+
+            search_start = json_start_index + 1
+            try:
+                parsed_value, decoded_length = decoder.raw_decode(
+                    candidate_text[json_start_index:]
+                )
+            except json.JSONDecodeError:
+                continue
+
+            payload_strings.extend(TefasService._iter_strings(parsed_value))
+            search_start = json_start_index + decoded_length
+
+    @staticmethod
+    def _iter_strings(value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+
+        if isinstance(value, list):
+            strings: list[str] = []
+            for item in value:
+                strings.extend(TefasService._iter_strings(item))
+            return strings
+
+        if isinstance(value, dict):
+            strings = []
+            for item in value.values():
+                strings.extend(TefasService._iter_strings(item))
+            return strings
+
+        return []
+
+    @staticmethod
+    def _build_bilgi_data_comparison_key(value: Any) -> Any:
+        if isinstance(value, Decimal):
+            return ("Decimal", str(value))
+
+        if isinstance(value, dict):
+            return (
+                "dict",
+                tuple(
+                    sorted(
+                        (key, TefasService._build_bilgi_data_comparison_key(item))
+                        for key, item in value.items()
+                    )
+                ),
+            )
+
+        if isinstance(value, list):
+            return (
+                "list",
+                tuple(TefasService._build_bilgi_data_comparison_key(item) for item in value),
+            )
+
+        return value
+
+    @staticmethod
+    def _find_bilgi_data_objects(candidate_text: str) -> list[dict[str, Any]]:
+        marker = '"bilgiData"'
+        decoder = json.JSONDecoder(parse_float=Decimal)
+        objects: list[dict[str, Any]] = []
+        search_start = 0
+
+        while True:
+            marker_index = candidate_text.find(marker, search_start)
+            if marker_index == -1:
+                return objects
+
+            search_start = marker_index + len(marker)
+            colon_index = candidate_text.find(":", search_start)
+            if colon_index == -1:
+                continue
+
+            json_start_index = colon_index + 1
+            while (
+                json_start_index < len(candidate_text)
+                and candidate_text[json_start_index].isspace()
+            ):
+                json_start_index += 1
+
+            try:
+                parsed_value, decoded_length = decoder.raw_decode(
+                    candidate_text[json_start_index:]
+                )
+            except json.JSONDecodeError:
+                continue
+
+            if not isinstance(parsed_value, dict):
+                raise TefasServiceError("TEFAS detail-analysis bilgiData must be an object.")
+
+            objects.append(parsed_value)
+            search_start = json_start_index + decoded_length
 
     @staticmethod
     def _extract_result_list(
@@ -409,6 +654,24 @@ class TefasService:
             return int(value)
         except (ValueError, TypeError) as exc:
             raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+    @staticmethod
+    def _normalize_optional_integral_int(value: Any, *, field_name: str) -> int | None:
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        try:
+            decimal_value = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+        if not decimal_value.is_finite() or decimal_value != decimal_value.to_integral_value():
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        return int(decimal_value)
 
     @staticmethod
     def _normalize_allocation_decimal(

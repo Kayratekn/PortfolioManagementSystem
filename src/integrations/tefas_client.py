@@ -22,6 +22,7 @@ class CustomTefasClient:
     GENERAL_INFO_ENDPOINT = "/api/funds/fonGnlBlgSiraliGetir"
     PORTFOLIO_BREAKDOWN_ENDPOINT = "/api/funds/dagilimSiraliGetirT"
     FUND_PROFILE_DETAIL_ENDPOINT = "/api/funds/fonProfilDtyGetir"
+    FUND_DETAIL_ANALYSIS_PAGE_PATH = "/tr/fon-detayli-analiz"
 
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -120,6 +121,17 @@ class CustomTefasClient:
             endpoint=self.FUND_PROFILE_DETAIL_ENDPOINT,
             payload=payload,
         )
+
+    def fetch_fund_detail_analysis_page(
+        self,
+        *,
+        fund_code: str,
+    ) -> str:
+        """Fetch the server-rendered TEFAS fund detail-analysis page."""
+
+        normalized_fund_code = fund_code.strip().upper()
+        endpoint = f"{self.FUND_DETAIL_ANALYSIS_PAGE_PATH}/{normalized_fund_code}"
+        return self._get_text(endpoint=endpoint)
 
     @staticmethod
     def _build_request_body(
@@ -256,5 +268,41 @@ class CustomTefasClient:
                 )
 
             return response_data
+
+        raise TefasClientError("TEFAS request failed unexpectedly.")
+
+    def _get_text(
+        self,
+        *,
+        endpoint: str,
+    ) -> str:
+        url = f"{self.base_url}{endpoint}"
+        total_attempts = 1 + self.max_retries
+
+        for attempt_index in range(total_attempts):
+            try:
+                with httpx.Client(
+                    timeout=self.timeout_seconds,
+                    follow_redirects=True,
+                ) as client:
+                    response = client.get(url)
+            except httpx.RequestError as exc:
+                if attempt_index < total_attempts - 1:
+                    self._sleep_before_retry(attempt_index=attempt_index, total_attempts=total_attempts)
+                    continue
+                raise TefasClientError(f"TEFAS request failed: {exc}") from exc
+
+            if self._should_retry_status_code(response.status_code):
+                status_exc = self._build_status_error(response)
+                if attempt_index < total_attempts - 1:
+                    self._sleep_before_retry(attempt_index=attempt_index, total_attempts=total_attempts)
+                    continue
+                raise TefasClientError(f"TEFAS request failed: {status_exc}") from status_exc
+
+            if 400 <= response.status_code <= 499:
+                status_exc = self._build_status_error(response)
+                raise TefasClientError(f"TEFAS request failed: {status_exc}") from status_exc
+
+            return response.text
 
         raise TefasClientError("TEFAS request failed unexpectedly.")
