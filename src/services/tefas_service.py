@@ -579,9 +579,9 @@ class TefasService:
                 row.get("tedPaySayisi"),
                 field_name="shares_outstanding",
             ),
-            "investor_count": TefasService._normalize_optional_int(
+            "investor_count": TefasService._normalize_general_info_investor_count(
                 row.get("kisiSayisi"),
-                field_name="investor_count",
+                fund_kind=fund_kind,
             ),
             "portfolio_size": TefasService._normalize_optional_decimal(
                 row.get("portfoyBuyukluk"),
@@ -654,6 +654,26 @@ class TefasService:
             return int(value)
         except (ValueError, TypeError) as exc:
             raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+    @staticmethod
+    def _normalize_general_info_investor_count(
+        value: Any,
+        *,
+        fund_kind: FundKind,
+    ) -> int | None:
+        normalized_value = TefasService._normalize_optional_int(
+            value,
+            field_name="investor_count",
+        )
+        normalized_fund_kind = TefasService._normalize_required_string(
+            fund_kind,
+            field_name="fund_kind",
+            uppercase=True,
+        )
+        if normalized_fund_kind == "BYF" and normalized_value == 0:
+            return None
+
+        return normalized_value
 
     @staticmethod
     def _normalize_optional_integral_int(value: Any, *, field_name: str) -> int | None:
