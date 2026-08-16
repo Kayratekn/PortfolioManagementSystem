@@ -34,6 +34,21 @@ class AssetRepository:
         )
         return list(self.db.scalars(statement))
 
+    def list_active_tefas_assets(self, *, limit: int) -> list[Asset]:
+        if limit <= 0:
+            return []
+
+        statement = (
+            select(Asset)
+            .where(
+                Asset.data_source == "TEFAS",
+                Asset.is_active.is_(True),
+            )
+            .order_by(Asset.asset_code.asc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(statement))
+
     def list_active_tefas_without_current_fund_type(
         self,
         *,

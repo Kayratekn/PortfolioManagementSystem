@@ -103,3 +103,27 @@ def test_list_active_tefas_without_current_fund_type_returns_empty_for_nonpositi
     )
 
     assert result == []
+
+
+def test_list_active_tefas_assets_filters_scope_orders_by_code_and_applies_limit(
+    db_session: Session,
+) -> None:
+    _add_asset(db_session, asset_code="BLH")
+    _add_asset(db_session, asset_code="AAL")
+    _add_asset(db_session, asset_code="AB1")
+    _add_asset(db_session, asset_code="OLD", is_active=False)
+    _add_asset(db_session, asset_code="EXT", data_source="OTHER")
+
+    result = AssetRepository(db_session).list_active_tefas_assets(limit=2)
+
+    assert [asset.asset_code for asset in result] == ["AAL", "AB1"]
+
+
+def test_list_active_tefas_assets_returns_empty_for_nonpositive_limit(
+    db_session: Session,
+) -> None:
+    _add_asset(db_session, asset_code="AAL")
+
+    result = AssetRepository(db_session).list_active_tefas_assets(limit=0)
+
+    assert result == []
