@@ -146,6 +146,58 @@ def test_fetch_general_info_preserves_null_optional_fields() -> None:
     assert result[0]["exchange_bulletin_price"] is None
 
 
+@pytest.mark.parametrize(
+    ("fund_kind", "raw_investor_count", "expected_investor_count"),
+    [
+        ("BYF", 0, None),
+        ("BYF", None, None),
+        ("BYF", 12, 12),
+        ("YAT", 0, 0),
+        ("EMK", 0, 0),
+        ("GYF", 0, 0),
+        ("GSYF", 0, 0),
+        ("YAT", 4845, 4845),
+    ],
+)
+def test_fetch_general_info_normalizes_byf_zero_investor_count_as_unavailable(
+    fund_kind: str,
+    raw_investor_count: object,
+    expected_investor_count: int | None,
+) -> None:
+    fake_client = FakeTefasClient(
+        {
+            "errorCode": None,
+            "errorMessage": None,
+            "resultList": [
+                {
+                    "fonKodu": "BLH",
+                    "fonUnvan": "Example Fund",
+                    "tarih": "2026-08-11",
+                    "fiyat": 49.222014,
+                    "tedPaySayisi": 1000,
+                    "kisiSayisi": raw_investor_count,
+                    "portfoyBuyukluk": 12345,
+                    "borsaBultenFiyat": 49.24,
+                }
+            ],
+        }
+    )
+    service = TefasService(client=fake_client)  # type: ignore[arg-type]
+
+    result = service.fetch_general_info(
+        start_date=date(2026, 8, 11),
+        end_date=date(2026, 8, 11),
+        fund_kind=fund_kind,  # type: ignore[arg-type]
+        fund_code="BLH",
+    )
+
+    assert result[0]["investor_count"] == expected_investor_count
+    assert result[0]["price"] == Decimal("49.222014")
+    assert result[0]["shares_outstanding"] == Decimal("1000")
+    assert result[0]["portfolio_size"] == Decimal("12345")
+    assert result[0]["exchange_bulletin_price"] == Decimal("49.24")
+
+
 def test_fetch_general_info_invalid_iso_date_raises_service_error() -> None:
     fake_client = FakeTefasClient(
         {
