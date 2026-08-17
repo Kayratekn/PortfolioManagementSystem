@@ -88,8 +88,13 @@ This leaves 54 observed portfolio-allocation raw fields.
 | `ymk` | `UNRESOLVED_NO_ACTIVE_SAMPLE` |
 
 These fields are present in the observed raw TEFAS schema, but no usable
-non-null/non-zero example was found during our discovery scan, so their
-business labels have not been verified.
+non-null/non-zero example has been observed in the tested data. Validation
+covered all five supported fund kinds (`YAT`, `EMK`, `BYF`, `GYF`, `GSYF`)
+across `2026-08-11`, `2026-08-12`, `2026-08-13`, plus an additional
+`2025-08-13` sample, for a total of 12,476 raw portfolio-breakdown rows.
+All 11 fields remained null/zero throughout the tested observations, so their
+business labels remain unverified and they are currently treated as
+unobserved/unused raw fields rather than guessed allocation categories.
 
 ## Important implementation notes
 
@@ -114,6 +119,10 @@ business labels have not been verified.
 ## Discovery status
 
 - 43 of 54 observed allocation fields are verified.
-- 11 of 54 remain unresolved due to lack of an active verification sample.
+- 11 of 54 remain unresolved because no active non-zero sample was observed
+  across 12,476 tested raw rows spanning five fund kinds and both 2025 and
+  2026 sample dates.
+- The unresolved fields are currently treated as unobserved/unused raw fields;
+  no business label is inferred without direct TEFAS evidence.
 - This is sufficient to model the currently observed active allocation data,
   while preserving unresolved raw fields for future discovery.
