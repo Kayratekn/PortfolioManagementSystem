@@ -18,9 +18,17 @@ class TefasFundMetricsResponse(BaseModel):
 
     five_observation_return_ratio: Decimal | None
     five_observation_baseline_date: date | None
+    five_observation_aum_change: Decimal | None
+    five_observation_aum_growth_ratio: Decimal | None
+    five_observation_investor_count_change: int | None
+    five_observation_investor_count_growth_ratio: Decimal | None
 
     one_month_return_ratio: Decimal | None
     one_month_baseline_date: date | None
+    one_month_aum_change: Decimal | None
+    one_month_aum_growth_ratio: Decimal | None
+    one_month_investor_count_change: int | None
+    one_month_investor_count_growth_ratio: Decimal | None
 
     investor_count_change: int | None
     investor_count_growth_ratio: Decimal | None

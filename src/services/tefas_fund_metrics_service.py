@@ -84,6 +84,49 @@ class TefasFundMetricsService:
             else None
         )
 
+        five_observation_aum_change = (
+            _change(current.portfolio_size, fifth_previous.portfolio_size)
+            if fifth_previous
+            else None
+        )
+        five_observation_aum_growth_ratio = (
+            _return_ratio(current.portfolio_size, fifth_previous.portfolio_size)
+            if fifth_previous
+            else None
+        )
+        five_observation_investor_count_change = (
+            _change(current.investor_count, fifth_previous.investor_count)
+            if fifth_previous
+            else None
+        )
+        five_observation_investor_count_growth_ratio = (
+            _int_growth_ratio(current.investor_count, fifth_previous.investor_count)
+            if fifth_previous
+            else None
+        )
+        one_month_aum_change = (
+            _change(current.portfolio_size, one_month_baseline.portfolio_size)
+            if one_month_baseline
+            else None
+        )
+        one_month_aum_growth_ratio = (
+            _return_ratio(current.portfolio_size, one_month_baseline.portfolio_size)
+            if one_month_baseline
+            else None
+        )
+        one_month_investor_count_change = (
+            _change(current.investor_count, one_month_baseline.investor_count)
+            if one_month_baseline
+            else None
+        )
+        one_month_investor_count_growth_ratio = (
+            _int_growth_ratio(
+                current.investor_count,
+                one_month_baseline.investor_count,
+            )
+            if one_month_baseline
+            else None
+        )
         investor_count_change = (
             _change(current.investor_count, previous.investor_count)
             if previous
@@ -145,9 +188,23 @@ class TefasFundMetricsService:
             five_observation_baseline_date=(
                 fifth_previous.data_date if fifth_previous else None
             ),
+            five_observation_aum_change=five_observation_aum_change,
+            five_observation_aum_growth_ratio=five_observation_aum_growth_ratio,
+            five_observation_investor_count_change=(
+                five_observation_investor_count_change
+            ),
+            five_observation_investor_count_growth_ratio=(
+                five_observation_investor_count_growth_ratio
+            ),
             one_month_return_ratio=one_month_return_ratio,
             one_month_baseline_date=(
                 one_month_baseline.data_date if one_month_baseline else None
+            ),
+            one_month_aum_change=one_month_aum_change,
+            one_month_aum_growth_ratio=one_month_aum_growth_ratio,
+            one_month_investor_count_change=one_month_investor_count_change,
+            one_month_investor_count_growth_ratio=(
+                one_month_investor_count_growth_ratio
             ),
             investor_count_change=investor_count_change,
             investor_count_growth_ratio=investor_count_growth_ratio,
@@ -216,5 +273,3 @@ def _change(
         return None
 
     return current_value - baseline_value
-
-
