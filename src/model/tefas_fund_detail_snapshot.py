@@ -25,6 +25,10 @@ class TefasFundDetailSnapshot(TimestampMixin, Base):
             "category_fund_count IS NULL OR category_fund_count >= 0",
             name="ck_tefas_fund_detail_snapshots_category_fund_count_nonnegative",
         ),
+        CheckConstraint(
+            "risk_value IS NULL OR (risk_value >= 1 AND risk_value <= 7)",
+            name="ck_tefas_fund_detail_snapshots_risk_value_range",
+        ),
         Index(
             "ix_tefas_fund_detail_snapshots_category_observed_at",
             "fund_category",
@@ -38,6 +42,7 @@ class TefasFundDetailSnapshot(TimestampMixin, Base):
     category_rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     category_fund_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     market_share_raw: Mapped[Decimal | None] = mapped_column(Numeric(20, 10), nullable=True)
+    risk_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_page: Mapped[str] = mapped_column(
         String(100),
         nullable=False,

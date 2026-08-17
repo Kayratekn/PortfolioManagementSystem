@@ -56,6 +56,9 @@ def test_tefas_fund_detail_snapshot_columns_types_and_nullability() -> None:
     assert columns.market_share_raw.type.scale == 10
     assert columns.market_share_raw.nullable is True
 
+    assert isinstance(columns.risk_value.type, Integer)
+    assert columns.risk_value.nullable is True
+
     assert isinstance(columns.source_page.type, String)
     assert columns.source_page.type.length == 100
     assert columns.source_page.nullable is False
@@ -114,6 +117,10 @@ def test_tefas_fund_detail_snapshot_constraints_are_named() -> None:
         constraints["ck_tefas_fund_detail_snapshots_category_fund_count_nonnegative"],
         CheckConstraint,
     )
+    assert isinstance(
+        constraints["ck_tefas_fund_detail_snapshots_risk_value_range"],
+        CheckConstraint,
+    )
 
 
 def test_tefas_fund_detail_snapshot_declares_only_category_observed_at_index() -> None:
@@ -138,6 +145,7 @@ def test_tefas_fund_detail_snapshot_semantics_can_be_represented(db_session: Ses
         category_rank=0,
         category_fund_count=None,
         market_share_raw=Decimal("0.0100000000"),
+        risk_value=3,
         observed_at=_observed_at(),
     )
 
@@ -150,6 +158,7 @@ def test_tefas_fund_detail_snapshot_semantics_can_be_represented(db_session: Ses
     assert snapshot.category_rank == 0
     assert snapshot.category_fund_count is None
     assert snapshot.market_share_raw == Decimal("0.0100000000")
+    assert snapshot.risk_value == 3
     assert snapshot.source_page == "fon-detayli-analiz"
     assert snapshot.observed_at == _observed_at().replace(tzinfo=None)
 
@@ -206,6 +215,28 @@ def test_tefas_fund_detail_snapshot_rejects_negative_category_fields(
     db_session.rollback()
 
 
+@pytest.mark.parametrize("risk_value", [0, 8])
+def test_tefas_fund_detail_snapshot_rejects_out_of_range_risk_value(
+    db_session: Session,
+    risk_value: int,
+) -> None:
+    asset = _build_asset()
+    db_session.add(asset)
+    db_session.commit()
+
+    db_session.add(
+        TefasFundDetailSnapshot(
+            asset_id=asset.id,
+            fund_category="Serbest Fon",
+            risk_value=risk_value,
+            observed_at=_observed_at(),
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
+
 def test_tefas_fund_detail_snapshot_migration_uses_current_head_and_expected_names() -> None:
     migration_text = Path(
         "alembic/versions/20260814_0007_create_tefas_fund_detail_snapshots.py"
@@ -219,3 +250,18 @@ def test_tefas_fund_detail_snapshot_migration_uses_current_head_and_expected_nam
     assert "ck_tefas_fund_detail_snapshots_category_fund_count_nonnegative" in migration_text
     assert "ix_tefas_fund_detail_snapshots_category_observed_at" in migration_text
     assert "ix_tefas_fund_detail_snapshots_asset_observed_at" not in migration_text
+
+def test_tefas_fund_detail_snapshot_risk_value_migration_uses_expected_names() -> None:
+    migration_text = Path(
+        "alembic/versions/20260817_0008_add_tefas_fund_detail_snapshot_risk_value.py"
+    ).read_text()
+
+    assert 'revision = "20260817_0008"' in migration_text
+    assert 'down_revision = "20260814_0007"' in migration_text
+    assert 'op.batch_alter_table("tefas_fund_detail_snapshots")' in migration_text
+    assert "batch_op.add_column" in migration_text
+    assert "batch_op.create_check_constraint" in migration_text
+    assert "batch_op.drop_constraint" in migration_text
+    assert "batch_op.drop_column" in migration_text
+    assert "risk_value" in migration_text
+    assert "ck_tefas_fund_detail_snapshots_risk_value_range" in migration_text
