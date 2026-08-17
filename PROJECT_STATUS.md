@@ -6,7 +6,7 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. The TEFAS capability/gap analysis for the data team is finalized. Official TEFAS fund risk-value extraction and snapshot persistence are implemented and verified locally; the feature is pending PR/merge.
+- **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. The TEFAS capability/gap analysis for the data team is finalized. Official TEFAS fund risk-value extraction and snapshot persistence are implemented, verified and merged into main.
 - **Status updated:** 2026-08-17
 
 ## Product summary
@@ -57,7 +57,7 @@ tests/
 | TEFAS portfolio allocation | Implemented / validated | 54 raw allocation fields observed; 43 mapped by same-date raw/UI verification; 11 preserved as unresolved/unobserved raw fields |
 | TEFAS derived metrics | Implemented | Daily, five-observation and one-month performance/evolution metrics are available for the implemented raw series |
 | TEFAS capability/gap analysis | Complete | Direct vs derived vs unavailable vs external-source-needed decisions documented for the data team |
-| Official TEFAS risk value | Implemented / verified locally | `profilData["riskDegeri"]` is normalized to `risk_value: int | None`, validated to 1..7 and persisted in detail snapshots; PR/merge pending |
+| Official TEFAS risk value | Complete / merged | `profilData["riskDegeri"]` is normalized to `risk_value: int | None`, validated to 1..7 and persisted in detail snapshots |
 | External source decision | Complete for current MVP | TEFAS is primary; KAP is preferred official supplementary source when needed; FVT is not a required backend dependency |
 | AI integration | Not started in backend | Analytics, sentiment and report-Q&A integration remain later-stage work |
 | Frontend integration | Not started in backend | Stable backend contracts will be provided as domains are finalized |
@@ -231,9 +231,11 @@ Important verified checkpoints include:
 
 - **PR #29** — short-term evolution metrics; merged.
 - **PR #30** — finalize TEFAS capability/gap analysis documentation; merged.
-- **Current branch:** `main`
-- **Current main commit after PR #30:** `0a83ec7`
-- **Working tree:** clean at the last verified checkpoint.
+- **PR #31** - refresh `PROJECT_STATUS.md`; merged.
+- **TEFAS risk-value feature** - official `riskDegeri` extraction, snapshot persistence and migration `20260817_0008`; merged.
+- **Canonical branch:** `main`
+- **Risk-value merge commit:** `5acb46c`
+- **Working tree:** clean at the risk-value merge checkpoint.
 
 ## Current data-team handoff status
 
@@ -255,19 +257,20 @@ Final high-level classification:
 
 Work in small controlled increments. Do not start the next item until the current item is verified.
 
-1. **Finish the TEFAS official risk-value slice**
-   - Review the final diff.
-   - Stage only the risk-value implementation, migration, tests and this status update.
-   - Commit, push and merge through a PR.
-   - Return local `main` to `origin/main` after merge.
+1. **Select the next backend/data-contract task**
+   - Review the remaining TEFAS/data gaps below.
+   - Choose the highest-value unresolved item before implementing anything.
+   - Keep the completed risk-value slice stable.
 
-2. **After the risk-value PR is merged**
-   - Re-evaluate the remaining TEFAS/data-contract gaps and choose the next highest-value backend task.
+2. **After the next task is selected**
+   - Perform source/code discovery first.
+   - Define the smallest correct implementation slice.
+   - Implement, run focused tests, then run the full suite before PR.
    - Do not jump directly into Transaction development without an explicit decision.
 
 ## Current open decisions / remaining data gaps
 
-These are not blockers for completing the current risk-value PR:
+Remaining TEFAS/data gaps to consider when selecting the next task:
 
 - Stable extraction path for other site-visible fields such as ISIN, platform status, transaction times, commissions and interest-content information.
 - Exact business mapping across the multiple TEFAS classification structures.
