@@ -139,6 +139,53 @@ def test_five_observation_return_uses_fifth_previous_observation(db_session: Ses
     assert result.five_observation_baseline_date == date(2026, 8, 1)
 
 
+def test_five_observation_aum_evolution_metrics_use_fifth_previous_observation(db_session: Session) -> None:
+    asset = _create_asset(db_session)
+    for item_date, portfolio_size in [
+        (date(2026, 8, 1), Decimal("10000")),
+        (date(2026, 8, 4), Decimal("11000")),
+        (date(2026, 8, 5), Decimal("12000")),
+        (date(2026, 8, 6), Decimal("13000")),
+        (date(2026, 8, 7), Decimal("14000")),
+        (date(2026, 8, 11), Decimal("12500")),
+    ]:
+        _add_daily_data(
+            db_session,
+            asset_id=asset.id,
+            data_date=item_date,
+            portfolio_size=portfolio_size,
+        )
+
+    result = _metrics(db_session)
+
+    assert result.five_observation_aum_change == Decimal("2500.0000")
+    assert result.five_observation_aum_growth_ratio == Decimal("0.25")
+    assert result.five_observation_baseline_date == date(2026, 8, 1)
+
+
+def test_five_observation_investor_evolution_metrics_use_fifth_previous_observation(db_session: Session) -> None:
+    asset = _create_asset(db_session)
+    for item_date, investor_count in [
+        (date(2026, 8, 1), 100),
+        (date(2026, 8, 4), 110),
+        (date(2026, 8, 5), 120),
+        (date(2026, 8, 6), 130),
+        (date(2026, 8, 7), 140),
+        (date(2026, 8, 11), 125),
+    ]:
+        _add_daily_data(
+            db_session,
+            asset_id=asset.id,
+            data_date=item_date,
+            investor_count=investor_count,
+        )
+
+    result = _metrics(db_session)
+
+    assert result.five_observation_investor_count_change == 25
+    assert result.five_observation_investor_count_growth_ratio == Decimal("0.25")
+    assert result.five_observation_baseline_date == date(2026, 8, 1)
+
 def test_exactly_current_plus_five_previous_observations_succeeds(db_session: Session) -> None:
     asset = _create_asset(db_session)
     for day in [1, 2, 3, 4, 5]:
@@ -161,6 +208,10 @@ def test_current_plus_only_four_previous_observations_sets_five_observation_metr
 
     assert result.five_observation_return_ratio is None
     assert result.five_observation_baseline_date is None
+    assert result.five_observation_aum_change is None
+    assert result.five_observation_aum_growth_ratio is None
+    assert result.five_observation_investor_count_change is None
+    assert result.five_observation_investor_count_growth_ratio is None
 
 
 def test_one_month_exact_target_date_baseline(db_session: Session) -> None:
@@ -173,6 +224,49 @@ def test_one_month_exact_target_date_baseline(db_session: Session) -> None:
     assert result.one_month_return_ratio == Decimal("0.1")
     assert result.one_month_baseline_date == date(2026, 7, 11)
 
+
+def test_one_month_aum_evolution_metrics_use_one_month_baseline(db_session: Session) -> None:
+    asset = _create_asset(db_session)
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 7, 11),
+        portfolio_size=Decimal("8000"),
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        portfolio_size=Decimal("10000"),
+    )
+
+    result = _metrics(db_session)
+
+    assert result.one_month_aum_change == Decimal("2000.0000")
+    assert result.one_month_aum_growth_ratio == Decimal("0.25")
+    assert result.one_month_baseline_date == date(2026, 7, 11)
+
+
+def test_one_month_investor_evolution_metrics_use_one_month_baseline(db_session: Session) -> None:
+    asset = _create_asset(db_session)
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 7, 11),
+        investor_count=80,
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        investor_count=100,
+    )
+
+    result = _metrics(db_session)
+
+    assert result.one_month_investor_count_change == 20
+    assert result.one_month_investor_count_growth_ratio == Decimal("0.25")
+    assert result.one_month_baseline_date == date(2026, 7, 11)
 
 def test_one_month_weekend_or_holiday_fallback_before_target_date(db_session: Session) -> None:
     asset = _create_asset(db_session)
@@ -205,6 +299,10 @@ def test_one_month_baseline_eight_calendar_days_old_is_rejected(db_session: Sess
 
     assert result.one_month_return_ratio is None
     assert result.one_month_baseline_date is None
+    assert result.one_month_aum_change is None
+    assert result.one_month_aum_growth_ratio is None
+    assert result.one_month_investor_count_change is None
+    assert result.one_month_investor_count_growth_ratio is None
 
 
 def test_one_month_search_never_uses_observation_after_target_date(db_session: Session) -> None:
@@ -216,6 +314,10 @@ def test_one_month_search_never_uses_observation_after_target_date(db_session: S
 
     assert result.one_month_return_ratio is None
     assert result.one_month_baseline_date is None
+    assert result.one_month_aum_change is None
+    assert result.one_month_aum_growth_ratio is None
+    assert result.one_month_investor_count_change is None
+    assert result.one_month_investor_count_growth_ratio is None
 
 
 def test_calendar_month_subtraction_works_correctly_around_month_end(db_session: Session) -> None:
@@ -259,6 +361,71 @@ def test_investor_zero_baseline_sets_growth_none_but_change_still_valid(db_sessi
     assert result.investor_count_change == 10
     assert result.investor_count_growth_ratio is None
 
+
+def test_none_investor_count_sets_short_term_investor_evolution_metrics_none(db_session: Session) -> None:
+    asset = _create_asset(db_session)
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 7, 11),
+        investor_count=100,
+    )
+    for day in [1, 4, 5, 6, 7]:
+        _add_daily_data(
+            db_session,
+            asset_id=asset.id,
+            data_date=date(2026, 8, day),
+            investor_count=100,
+        )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        investor_count=None,
+    )
+
+    result = _metrics(db_session)
+
+    assert result.five_observation_investor_count_change is None
+    assert result.five_observation_investor_count_growth_ratio is None
+    assert result.one_month_investor_count_change is None
+    assert result.one_month_investor_count_growth_ratio is None
+
+
+def test_zero_investor_baselines_keep_change_and_set_short_term_growth_none(db_session: Session) -> None:
+    asset = _create_asset(db_session)
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 7, 11),
+        investor_count=0,
+    )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 1),
+        investor_count=0,
+    )
+    for day in [4, 5, 6, 7]:
+        _add_daily_data(
+            db_session,
+            asset_id=asset.id,
+            data_date=date(2026, 8, day),
+            investor_count=100,
+        )
+    _add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 11),
+        investor_count=10,
+    )
+
+    result = _metrics(db_session)
+
+    assert result.five_observation_investor_count_change == 10
+    assert result.five_observation_investor_count_growth_ratio is None
+    assert result.one_month_investor_count_change == 10
+    assert result.one_month_investor_count_growth_ratio is None
 
 def test_aum_change(db_session: Session) -> None:
     asset = _create_asset(db_session)
@@ -845,4 +1012,3 @@ def test_service_does_not_write_or_commit(db_session: Session, monkeypatch: pyte
 
     assert commit_calls == 0
     assert flush_calls == 0
-

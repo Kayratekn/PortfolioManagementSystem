@@ -220,6 +220,27 @@ def test_decimal_ratios_serialize_as_json_strings(client, db_session: Session) -
     assert body["one_month_return_ratio"] == "0.01"
 
 
+def test_metrics_response_exposes_short_term_evolution_metrics(client, db_session: Session) -> None:
+    token = create_authenticated_user(client)
+    asset = create_tefas_asset(db_session)
+    create_metrics_history(db_session, asset_id=asset.id)
+
+    response = client.get(
+        "/api/v1/tefas/funds/AB1/metrics?date=2026-08-11",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["five_observation_aum_change"] == "2100.0000"
+    assert body["five_observation_aum_growth_ratio"] == "0.2625"
+    assert body["five_observation_investor_count_change"] == 20
+    assert body["five_observation_investor_count_growth_ratio"] == "0.25"
+    assert body["one_month_aum_change"] == "1100.0000"
+    assert body["one_month_aum_growth_ratio"] == "0.122222222222222222222222222"
+    assert body["one_month_investor_count_change"] == 10
+    assert body["one_month_investor_count_growth_ratio"] == "0.111111111111111111111111111"
+
 def test_zero_changes_and_zero_growth_are_preserved(client, db_session: Session) -> None:
     token = create_authenticated_user(client)
     asset = create_tefas_asset(db_session)
@@ -565,5 +586,3 @@ def test_controller_contains_no_metric_calculation_logic() -> None:
     assert "Decimal(" not in controller_source
     assert "portfolio_size" not in controller_source
     assert "investor_count" not in controller_source
-
-
