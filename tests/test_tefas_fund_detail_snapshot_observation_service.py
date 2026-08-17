@@ -76,6 +76,7 @@ def _metadata(**overrides: object) -> TefasFundDetailPageMetadataResult:
         "category_rank": 1,
         "category_fund_count": 42,
         "market_share_raw": Decimal("1.2345678901"),
+        "risk_value": 3,
         "source_page": "fon-detayli-analiz",
     }
     values.update(overrides)
@@ -114,6 +115,7 @@ def test_observe_fund_detail_snapshot_creates_snapshot_for_active_tefas_asset(
     assert snapshot.category_rank == 1
     assert snapshot.category_fund_count == 42
     assert snapshot.market_share_raw == Decimal("1.2345678901")
+    assert snapshot.risk_value == 3
     assert snapshot.source_page == "fon-detayli-analiz"
     assert snapshot.observed_at == OBSERVED_AT
     assert tefas_service.calls == ["AAL"]
@@ -166,6 +168,7 @@ def test_observe_fund_detail_snapshot_preserves_nullable_source_fields(
                 category_rank=None,
                 category_fund_count=None,
                 market_share_raw=None,
+                risk_value=None,
             )
         ),
     )
@@ -178,6 +181,7 @@ def test_observe_fund_detail_snapshot_preserves_nullable_source_fields(
     assert snapshot.category_rank is None
     assert snapshot.category_fund_count is None
     assert snapshot.market_share_raw is None
+    assert snapshot.risk_value is None
 
 
 def test_observe_fund_detail_snapshot_preserves_decimal_exactly(
@@ -229,7 +233,7 @@ def test_observe_fund_detail_snapshot_rejects_conflicting_same_timestamp_metadat
     _add_asset(db_session)
     tefas_service = FakeTefasService(
         _metadata(),
-        _metadata(fund_category="Para Piyasasi Fonu"),
+        _metadata(risk_value=4),
     )
     service = TefasFundDetailSnapshotObservationService(
         db_session,

@@ -53,6 +53,7 @@ class TefasFundDetailPageMetadataResult:
     category_rank: int | None
     category_fund_count: int | None
     market_share_raw: Decimal | None
+    risk_value: int | None = None
     source_page: str = "fon-detayli-analiz"
     source_field_names: tuple[str, ...] = (
         "fonKodu",
@@ -60,7 +61,9 @@ class TefasFundDetailPageMetadataResult:
         "kategoriDerece",
         "kategoriFonSay",
         "pazarPayi",
+        "riskDegeri",
     )
+
 
 @dataclass(frozen=True)
 class TefasFundTypeResult:
@@ -192,7 +195,7 @@ class TefasService:
         html_text = self.client.fetch_fund_detail_analysis_page(
             fund_code=normalized_fund_code,
         )
-        bilgi_data = self._extract_bilgi_data_from_html(
+        bilgi_data, profil_data = self._extract_detail_page_data_from_html(
             html_text=html_text,
             fund_code=normalized_fund_code,
         )
@@ -225,6 +228,10 @@ class TefasService:
             market_share_raw=self._normalize_optional_decimal(
                 bilgi_data.get("pazarPayi"),
                 field_name="market_share_raw",
+            ),
+            risk_value=self._normalize_optional_risk_value(
+                profil_data.get("riskDegeri"),
+                field_name="risk_value",
             ),
         )
 
@@ -328,18 +335,28 @@ class TefasService:
         )
 
     @staticmethod
-    def _extract_bilgi_data_from_html(
+    def _extract_detail_page_data_from_html(
         *,
         html_text: str,
         fund_code: str,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         if not isinstance(html_text, str) or not html_text:
             raise TefasServiceError("TEFAS detail-analysis page HTML is empty.")
 
         bilgi_data_objects: list[dict[str, Any]] = []
-        for candidate_text in TefasService._iter_bilgi_data_candidate_texts(html_text):
+        profil_data_objects: list[dict[str, Any]] = []
+        for candidate_text in TefasService._iter_detail_page_candidate_texts(html_text):
             bilgi_data_objects.extend(
-                TefasService._find_bilgi_data_objects(candidate_text)
+                TefasService._find_detail_page_data_objects(
+                    candidate_text,
+                    marker_name="bilgiData",
+                )
+            )
+            profil_data_objects.extend(
+                TefasService._find_detail_page_data_objects(
+                    candidate_text,
+                    marker_name="profilData",
+                )
             )
 
         if not bilgi_data_objects:
@@ -364,19 +381,60 @@ class TefasService:
                 f"TEFAS detail-analysis bilgiData exact match not found: fund_code={fund_code}"
             )
 
-        first_match_key = TefasService._build_bilgi_data_comparison_key(exact_matches[0])
+        first_match_key = TefasService._build_detail_page_data_comparison_key(exact_matches[0])
         if any(
-            TefasService._build_bilgi_data_comparison_key(match) != first_match_key
+            TefasService._build_detail_page_data_comparison_key(match) != first_match_key
             for match in exact_matches[1:]
         ):
             raise TefasServiceError(
                 f"Conflicting TEFAS detail-analysis bilgiData exact matches: fund_code={fund_code}"
             )
 
+        profil_data = TefasService._select_matching_profil_data(
+            profil_data_objects=profil_data_objects,
+            fund_code=fund_code,
+        )
+        return exact_matches[0], profil_data
+
+    @staticmethod
+    def _select_matching_profil_data(
+        *,
+        profil_data_objects: list[dict[str, Any]],
+        fund_code: str,
+    ) -> dict[str, Any]:
+        if not profil_data_objects:
+            return {}
+
+        exact_matches: list[dict[str, Any]] = []
+        for profil_data in profil_data_objects:
+            try:
+                source_fund_code = TefasService._normalize_required_string(
+                    profil_data.get("fonKodu"),
+                    field_name="fund_code",
+                    uppercase=True,
+                )
+            except TefasServiceError:
+                continue
+
+            if source_fund_code == fund_code:
+                exact_matches.append(profil_data)
+
+        if not exact_matches:
+            return {}
+
+        first_match_key = TefasService._build_detail_page_data_comparison_key(exact_matches[0])
+        if any(
+            TefasService._build_detail_page_data_comparison_key(match) != first_match_key
+            for match in exact_matches[1:]
+        ):
+            raise TefasServiceError(
+                f"Conflicting TEFAS detail-analysis profilData exact matches: fund_code={fund_code}"
+            )
+
         return exact_matches[0]
 
     @staticmethod
-    def _iter_bilgi_data_candidate_texts(html_text: str) -> list[str]:
+    def _iter_detail_page_candidate_texts(html_text: str) -> list[str]:
         candidate_texts = [html_text]
         unescaped_html_text = html_module.unescape(html_text)
         if unescaped_html_text != html_text:
@@ -441,7 +499,7 @@ class TefasService:
         return []
 
     @staticmethod
-    def _build_bilgi_data_comparison_key(value: Any) -> Any:
+    def _build_detail_page_data_comparison_key(value: Any) -> Any:
         if isinstance(value, Decimal):
             return ("Decimal", str(value))
 
@@ -450,7 +508,7 @@ class TefasService:
                 "dict",
                 tuple(
                     sorted(
-                        (key, TefasService._build_bilgi_data_comparison_key(item))
+                        (key, TefasService._build_detail_page_data_comparison_key(item))
                         for key, item in value.items()
                     )
                 ),
@@ -459,14 +517,18 @@ class TefasService:
         if isinstance(value, list):
             return (
                 "list",
-                tuple(TefasService._build_bilgi_data_comparison_key(item) for item in value),
+                tuple(TefasService._build_detail_page_data_comparison_key(item) for item in value),
             )
 
         return value
 
     @staticmethod
-    def _find_bilgi_data_objects(candidate_text: str) -> list[dict[str, Any]]:
-        marker = '"bilgiData"'
+    def _find_detail_page_data_objects(
+        candidate_text: str,
+        *,
+        marker_name: str,
+    ) -> list[dict[str, Any]]:
+        marker = json.dumps(marker_name)
         decoder = json.JSONDecoder(parse_float=Decimal)
         objects: list[dict[str, Any]] = []
         search_start = 0
@@ -496,7 +558,9 @@ class TefasService:
                 continue
 
             if not isinstance(parsed_value, dict):
-                raise TefasServiceError("TEFAS detail-analysis bilgiData must be an object.")
+                raise TefasServiceError(
+                    f"TEFAS detail-analysis {marker_name} must be an object."
+                )
 
             objects.append(parsed_value)
             search_start = json_start_index + decoded_length
@@ -692,6 +756,20 @@ class TefasService:
             raise TefasServiceError(f"Invalid normalized field: {field_name}")
 
         return int(decimal_value)
+
+    @staticmethod
+    def _normalize_optional_risk_value(value: Any, *, field_name: str) -> int | None:
+        normalized_value = TefasService._normalize_optional_integral_int(
+            value,
+            field_name=field_name,
+        )
+        if normalized_value is None:
+            return None
+
+        if normalized_value < 1 or normalized_value > 7:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        return normalized_value
 
     @staticmethod
     def _normalize_allocation_decimal(

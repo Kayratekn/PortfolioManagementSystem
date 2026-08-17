@@ -66,6 +66,7 @@ class TefasFundDetailSnapshotObservationService:
                     category_rank=metadata.category_rank,
                     category_fund_count=metadata.category_fund_count,
                     market_share_raw=metadata.market_share_raw,
+                    risk_value=metadata.risk_value,
                     source_page=metadata.source_page,
                 )
                 return existing_snapshot
@@ -76,6 +77,7 @@ class TefasFundDetailSnapshotObservationService:
                 category_rank=metadata.category_rank,
                 category_fund_count=metadata.category_fund_count,
                 market_share_raw=metadata.market_share_raw,
+                risk_value=metadata.risk_value,
                 source_page=metadata.source_page,
                 observed_at=resolved_observed_at,
             )
@@ -112,6 +114,7 @@ def _validate_existing_snapshot_matches_metadata(
     category_rank: int | None,
     category_fund_count: int | None,
     market_share_raw: object,
+    risk_value: int | None,
     source_page: str,
 ) -> None:
     if (
@@ -119,6 +122,7 @@ def _validate_existing_snapshot_matches_metadata(
         and snapshot.category_rank == category_rank
         and snapshot.category_fund_count == category_fund_count
         and snapshot.market_share_raw == market_share_raw
+        and snapshot.risk_value == risk_value
         and snapshot.source_page == source_page
     ):
         return
