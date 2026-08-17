@@ -17,7 +17,7 @@ Availability classifications used in this document:
 | Attribute | Why useful | Classification | Current TEFAS evidence | Verified raw field / endpoint if available | Can it be derived? | External source candidate | Priority | Notes / unresolved issue |
 |---|---|---|---|---|---|---|---|---|
 | ISIN code | External identifier, cross-system matching | `TEFAS_SITE_VISIBLE_NEEDS_EXTRACTION_VALIDATION` | Manually observed on TEFAS site fund-profile concepts | None verified yet | No | None yet | High | Site-visible, but no verified structured extraction path yet. |
-| Fund risk value / risk score | Risk disclosure and filtering | `TEFAS_SITE_VISIBLE_NEEDS_EXTRACTION_VALIDATION` | Manually observed on TEFAS site fund-profile concepts | None verified yet | No | None yet | High | Site-visible, but no verified raw endpoint/value source yet. |
+| Fund risk value / risk score | Risk disclosure and filtering | `TEFAS_SITE_VISIBLE_NEEDS_EXTRACTION_VALIDATION` | Confirmed on the official TEFAS fund detail-analysis page as a direct 1-7 fund risk value | No backend extraction path implemented yet | No | None | High | TEFAS itself provides the official current risk value, so an external source is not currently required. Backend extraction and normalization still need implementation; missing source values should remain null rather than being replaced with a derived volatility score. |
 | Fund category | Classification, filtering, grouping | `VERIFIED_TEFAS_STRUCTURED` | Verified endpoint observations | `fonDetayGetir`: `fonTipi`, `fonTurKod`, `fonTurAciklama`; `fonUnvanGetir`: `tanim` | No | None | High | Multiple TEFAS classification structures exist; mapping between them still needs careful modeling. |
 | Fund subtype | Classification, filtering, grouping | `VERIFIED_TEFAS_STRUCTURED` | Verified endpoint observations | `fonDetayGetir`: `fonTipi`, `fonTurKod`, `fonTurAciklama` | No | None | High | Structured metadata exists, but business interpretation must still stay conservative. |
 | Founder / management company | Ownership/manager metadata | `VERIFIED_TEFAS_STRUCTURED` | Verified endpoint observations | `getFplFonList`: `kurucuKod`, `kurucuAd` | No | None | High | Already verified as structured TEFAS directory data. |
@@ -38,36 +38,41 @@ Availability classifications used in this document:
 | Fund total value | AUM, size, market-share denominator candidate | `VERIFIED_TEFAS_STRUCTURED` | Verified general-info endpoint; site metric concept `fundTotalValue` | `fonGnlBlgSiraliGetir`: `portfoyBuyukluk`, `tarih` | No | None | High | Verified raw TEFAS field exists. |
 | Investor count | Participation breadth | `VERIFIED_TEFAS_STRUCTURED` | Verified general-info endpoint; site metric concept `investorCount` | `fonGnlBlgSiraliGetir`: `kisiSayisi`, `tarih` | No | None | High | Verified raw TEFAS field exists. |
 | Shares outstanding | Ownership base size | `VERIFIED_TEFAS_STRUCTURED` | Verified general-info endpoint; site metric concept `fundShares` | `fonGnlBlgSiraliGetir`: `tedPaySayisi`, `tarih` | No | None | High | Verified raw TEFAS field exists. |
-| Asset allocation | Portfolio exposure analysis | `TEFAS_SITE_VISIBLE_NEEDS_EXTRACTION_VALIDATION` | Verified structured endpoint exists, and site describes allocation as latest Takasbank-reported data | `dagilimSiraliGetirT`: abbreviated fields such as `bb`, `bpp`, `gsykb`, `vdm`, `tarih` | Not safely yet | None yet | High | Structured path exists, but abbreviated raw fields are not decoded; not production-ready yet. |
+| Asset allocation | Portfolio exposure analysis | `VERIFIED_TEFAS_STRUCTURED` | Verified `dagilimSiraliGetirT` endpoint plus same-date TEFAS UI validation | `dagilimSiraliGetirT`: 54 observed allocation raw fields plus metadata; 43 raw fields have verified business-label mappings | No derivation required for verified mapped fields | None | High | 43 of 54 allocation fields have verified same-date raw/UI mappings. The remaining 11 fields (`bb`, `db`, `dot`, `eut`, `fkb`, `kh`, `kks`, `t`, `vm`, `yba`, `ymk`) remained null/zero across 12,476 tested raw rows and are preserved as unobserved/unused raw fields without guessed labels. |
 | Historical price | Performance and risk analytics base series | `VERIFIED_TEFAS_STRUCTURED` | Verified historical-price endpoint | `fonFiyatBilgiGetir`: `fonKodu`, `fonUnvan`, `kategoriDerece`, `kategoriFonSay`, `tarih`, `fiyat` | No | None | High | For `BYF`, `fiyat` semantics differ from `fonGnlBlgSiraliGetir.fiyat` in the verified `BLH` observation. |
 | Historical returns | Performance metrics over time | `DERIVABLE_FROM_TEFAS` | Metric matrix confirms derivation from verified historical prices; site exposes return concepts | Primarily `fonFiyatBilgiGetir`: `fiyat`, `tarih` | Yes | None | High | Daily, 5-day, 1-month, 3-month, 6-month, YTD, 1-year and longer-window returns can be derived conservatively from price history. |
-| Category ranking | Relative ranking within category | `TEFAS_SITE_VISIBLE_NEEDS_EXTRACTION_VALIDATION` | Site metric concept `fundCategoryDegree`; verified historical-price endpoint includes unresolved ranking-style fields | `fonFiyatBilgiGetir`: `kategoriDerece`, `kategoriFonSay` | Not safely yet | None yet | Medium | Ranking semantics remain unresolved; not production-ready. |
+| Estimated net fund flow / inflow-outflow | Short-term capital movement analysis | `DERIVABLE_FROM_TEFAS` | Verified TEFAS daily AUM and price data; derivation methodology documented in the metric matrix | `fonGnlBlgSiraliGetir`: `portfoyBuyukluk`, `fiyat`, `tarih`; `tedPaySayisi` can support cross-checking | Yes | None | High | Derived as `current AUM - previous AUM * (current price / previous price)`. This is an estimated net flow rather than a direct subscription/redemption transaction field; raw investor cash-flow transactions remain unavailable in the verified TEFAS dataset. |
+| 1-year category ranking | Relative 1-year performance rank within the fund category | `VERIFIED_TEFAS_STRUCTURED` | Verified structured data extracted from the TEFAS fund detail-analysis page | Fund detail `bilgi_data`: `kategoriDerece`, `kategoriFonSay` | No | None | High | TEFAS exposes the current 1-year category rank and category fund count directly. The backend already extracts and stores both values. Zero or null source values are preserved conservatively and are not interpreted as valid ranks. |
 
 ## Recommended external-source investigation order
 
-1. TEFAS structured/site source validation.
-2. KAP or another primary official source.
-3. FVT only for important remaining gaps.
+1. TEFAS as the primary source for daily fund data and validated site/detail data.
+2. KAP as the preferred official supplementary source when a required disclosure or granular fund document is not available through TEFAS.
+3. FVT only as a reference, cross-check, or product-analysis inspiration source; do not make it a required backend data dependency for the current MVP.
 
 ## Likely MVP external-data needs
 
-Current evidence does not prove that an external source is necessary for the
-core MVP metrics already supported by verified TEFAS data, such as fund total
-value, investor count, shares outstanding, historical price, historical
-returns, founder/management company, operator, category/subtype metadata, and
-active/inactive status.
+No external source is currently required for the core MVP fund-data
+capabilities. Verified TEFAS data covers fund total value, investor count,
+shares outstanding, historical price, founder/management company, operator,
+category/subtype metadata, active/inactive status, 1-year category ranking,
+and the verified asset-allocation mappings. Historical returns and estimated
+net fund flow can be derived from verified TEFAS daily data.
 
-The most likely early external-data candidate is KAP for settlement/value-date
-information if TEFAS site extraction cannot be validated as a stable structured
-source.
+The official current fund risk value is also available on the TEFAS
+detail-analysis page, so it does not currently justify an external data
+dependency; backend extraction and normalization still need implementation.
 
-No current evidence justifies recommending FVT for the MVP yet.
+KAP remains the preferred official supplementary source when a required
+disclosure, settlement/value-date field, or more granular fund document cannot
+be reliably obtained from TEFAS.
+
+FVT is not required as a backend data dependency for the current MVP. It may be
+used only as a reference, cross-check, or product-analysis inspiration source.
 
 ## Questions still requiring discovery
 
-- Is there a stable structured TEFAS extraction path for site-visible fields such as ISIN, risk value, platform status, transaction times, commissions, and interest-content information?
-- What do the abbreviated `dagilimSiraliGetirT` asset-allocation fields mean?
-- Do `kategoriDerece` and `kategoriFonSay` actually represent category ranking, and if so, what is the exact denominator/grouping logic?
+- Is there a stable structured TEFAS extraction path for site-visible fields such as ISIN, platform status, transaction times, commissions, and interest-content information?
 - What is the exact business mapping between `fonDetayGetir`, `fonUnvanGetir`, and `fonTipiGetir` classification structures?
 - Is there a verified TEFAS structured source for management fee?
 - Does TEFAS expose an official benchmark field anywhere, or only comparison series through `fonProfilDtyGetir`?
@@ -89,10 +94,13 @@ Already covered by verified TEFAS structured data:
 - Investor count.
 - Shares outstanding.
 - Historical price.
+- Asset allocation (43 verified mappings; 11 unobserved raw fields preserved).
+- 1-year category ranking.
 
 Available from verified TEFAS derivation:
 
 - Historical returns.
+- Estimated net fund flow / inflow-outflow.
 
 Not yet proven as structured, but visible on the TEFAS site:
 
@@ -106,8 +114,6 @@ Not yet proven as structured, but visible on the TEFAS site:
 - Entrance commission.
 - Exit commission.
 - Interest-content information.
-- Asset allocation semantics.
-- Category ranking semantics.
 
 Still needing source research:
 
