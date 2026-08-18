@@ -6,8 +6,8 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. The TEFAS capability/gap analysis for the data team is finalized. Official TEFAS fund risk-value extraction and snapshot persistence are implemented, verified and merged into main.
-- **Status updated:** 2026-08-17
+- **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. Official TEFAS fund risk-value extraction is merged. Multi-kind scheduled daily TEFAS synchronization for YAT, EMK, BYF, GYF and GSYF is implemented on the current feature branch and verified locally against TEFAS and PostgreSQL; PR/merge is still pending.
+- **Status updated:** 2026-08-18
 
 ## Product summary
 
@@ -53,6 +53,7 @@ tests/
 | Transaction domain | Not started / deferred | Transaction vertical slice has not been the current focus; do not start it before the active TEFAS/data task is closed |
 | TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown and fund-detail page data are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
+| TEFAS scheduled daily sync | Implemented / locally verified | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; PR/merge pending |
 | TEFAS detail snapshot | Implemented | Includes fund category, 1-year category rank, category fund count, raw market-share value and official TEFAS risk value |
 | TEFAS portfolio allocation | Implemented / validated | 54 raw allocation fields observed; 43 mapped by same-date raw/UI verification; 11 preserved as unresolved/unobserved raw fields |
 | TEFAS derived metrics | Implemented | Daily, five-observation and one-month performance/evolution metrics are available for the implemented raw series |
@@ -113,7 +114,7 @@ The backend detail snapshot currently preserves:
 
 `category_rank` / `category_fund_count` were validated against the TEFAS detail-analysis semantics as the current 1-year category ranking and category fund count.
 
-The official TEFAS 1–7 fund risk value is source-confirmed but is **not yet extracted or stored**. Do not substitute a derived volatility score for the official source value.
+The official TEFAS 1–7 fund risk value is source-confirmed, extracted from exact-matching `profilData["riskDegeri"]`, validated to 1..7 and persisted in fund-detail snapshots. Do not substitute a derived volatility score when the official source value is unavailable.
 
 ## TEFAS portfolio-allocation status
 
@@ -223,8 +224,13 @@ Important verified checkpoints include:
 - Fresh SQLite `alembic upgrade head` passed through revision `20260817_0008`.
 - SQLite migration round-trip `0008 -> 0007 -> 0008` passed.
 - Focused risk-value test suite: **109 passed**.
-- Current full backend test-suite result: **533 passed**.
 - `git diff --check` passed for the risk-value implementation, with Windows LF/CRLF normalization warnings only.
+- Multi-kind scheduled daily sync was verified locally for `YAT`, `EMK`, `BYF`, `GYF` and `GSYF`.
+- The scheduled flow uses fund-kind-level bulk general-info requests rather than one request per fund.
+- Real TEFAS/PostgreSQL smoke test for 2026-08-17 persisted: YAT 2033, EMK 400, BYF 30, GYF 255 and GSYF 539 funds; 3257 TEFAS fund assets were present after the sync.
+- Focused scheduled-sync test suite: **20 passed**.
+- Current full backend test-suite result: **537 passed**.
+- `git diff --check` passed for the current scheduled-sync feature.
 - Short-term evolution metrics were implemented and merged in PR #29.
 
 ## Recent Git milestones
@@ -233,9 +239,11 @@ Important verified checkpoints include:
 - **PR #30** — finalize TEFAS capability/gap analysis documentation; merged.
 - **PR #31** - refresh `PROJECT_STATUS.md`; merged.
 - **TEFAS risk-value feature** - official `riskDegeri` extraction, snapshot persistence and migration `20260817_0008`; merged.
+- **TEFAS multi-kind scheduled daily sync** - YAT, EMK, BYF, GYF and GSYF bulk daily synchronization implemented and locally verified on `kayra/tefas-multi-kind-scheduled-sync`; PR/merge pending.
 - **Canonical branch:** `main`
 - **Risk-value merge commit:** `5acb46c`
-- **Working tree:** clean at the risk-value merge checkpoint.
+- **Current feature branch:** `kayra/tefas-multi-kind-scheduled-sync`
+- **Working tree:** scheduled-sync implementation, tests and `PROJECT_STATUS.md` changes passed final verification and are pending commit/PR.
 
 ## Current data-team handoff status
 
@@ -248,25 +256,34 @@ Final high-level classification:
 - Estimated net fund flow → **TEFAS derived**
 - Verified allocation categories → **TEFAS direct**
 - 1-year category ranking → **TEFAS direct**
-- Official current risk value → **TEFAS source confirmed; backend extraction pending**
+- Official current risk value → **TEFAS direct; backend extraction and snapshot persistence complete**
 - Raw subscription/redemption transactions → **unavailable in the verified TEFAS dataset**
 - FVT → **not required for current MVP**
 - KAP → **official supplementary source when needed**
 
 ## Immediate next backend steps
 
-Work in small controlled increments. Do not start the next item until the current item is verified.
+Work in small controlled increments. Do not start a new backend feature until the current scheduled-sync slice is merged and the repository is clean.
 
-1. **Select the next backend/data-contract task**
-   - Review the remaining TEFAS/data gaps below.
-   - Choose the highest-value unresolved item before implementing anything.
-   - Keep the completed risk-value slice stable.
+1. **Finalize multi-kind scheduled daily TEFAS sync**
+   - Keep the verified default scope as `YAT`, `EMK`, `BYF`, `GYF` and `GSYF`.
+   - Preserve fund-kind-level bulk requests; do not introduce one-request-per-fund daily synchronization.
+   - Keep the existing behavior where an explicit `--kind` runs only that fund kind.
+   - Keep `--fund-code` dependent on an explicitly supplied `--kind`.
+   - Run the focused scheduled-sync tests and the full backend test suite.
+   - Review `git diff --check` and the final changed files.
+   - Commit, push and merge through a PR.
+   - Return local `main` to `origin/main` after merge and remove the completed feature branch.
 
-2. **After the next task is selected**
-   - Perform source/code discovery first.
-   - Define the smallest correct implementation slice.
-   - Implement, run focused tests, then run the full suite before PR.
-   - Do not jump directly into Transaction development without an explicit decision.
+2. **After scheduled sync is merged**
+   - Record the merged state and PR/commit information in this file.
+   - Keep the five-year historical bulk-data collection outside this backend slice; the data team is handling that historical dataset.
+   - The backend responsibility for this slice is the ongoing daily collection and persistence of current TEFAS data across all five supported fund kinds.
+   - Then review the remaining TEFAS/data-contract gaps and select the next highest-value backend task before implementing anything.
+
+3. **Do not start unrelated domains yet**
+   - Do not jump directly into Transaction development while TEFAS/data-contract work still has an explicitly selected higher-priority task.
+   - Continue with source/code discovery before every new implementation slice.
 
 ## Current open decisions / remaining data gaps
 

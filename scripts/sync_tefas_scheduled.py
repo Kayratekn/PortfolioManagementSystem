@@ -13,9 +13,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from scripts import sync_tefas_daily
 
 
-MVP_FUND_KINDS = sync_tefas_daily.MVP_FUND_KINDS
-
-
 def previous_business_day(reference_date: date) -> date:
     selected_date = reference_date - timedelta(days=1)
     while selected_date.weekday() >= 5:
@@ -31,7 +28,7 @@ def current_date() -> date:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run scheduled TEFAS synchronization.")
-    parser.add_argument("--kind", default="YAT", choices=MVP_FUND_KINDS)
+    parser.add_argument("--kind", default=None, choices=sync_tefas_daily.SYNC_FUND_KINDS)
     parser.add_argument("--fund-code", dest="fund_code", default=None)
     parser.add_argument(
         "--date-mode",
@@ -55,30 +52,39 @@ def select_data_date(*, reference_date: date, date_mode: str) -> date:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.fund_code is not None and args.kind is None:
+        parser.error("--fund-code requires --kind")
 
     reference_date = args.reference_date or current_date()
     selected_data_date = select_data_date(
         reference_date=reference_date,
         date_mode=args.date_mode,
     )
+    selected_fund_kinds = (args.kind,) if args.kind is not None else sync_tefas_daily.SYNC_FUND_KINDS
 
     print("TEFAS scheduled sync")
     print(f"reference date: {reference_date.isoformat()}")
     print(f"selected data date: {selected_data_date.isoformat()}")
     print(f"date mode: {args.date_mode}")
-    print(f"fund kind: {args.kind}")
+    print(f"fund kinds: {', '.join(selected_fund_kinds)}")
     print(f"fund code: {args.fund_code}")
 
-    daily_arguments = [
-        "--kind",
-        args.kind,
-        "--date",
-        selected_data_date.isoformat(),
-    ]
-    if args.fund_code is not None:
-        daily_arguments.extend(["--fund-code", args.fund_code])
+    final_exit_code = 0
+    for fund_kind in selected_fund_kinds:
+        daily_arguments = [
+            "--kind",
+            fund_kind,
+            "--date",
+            selected_data_date.isoformat(),
+        ]
+        if args.fund_code is not None:
+            daily_arguments.extend(["--fund-code", args.fund_code])
 
-    return sync_tefas_daily.main(daily_arguments)
+        exit_code = sync_tefas_daily.main(daily_arguments)
+        if exit_code != 0:
+            final_exit_code = 1
+
+    return final_exit_code
 
 
 if __name__ == "__main__":
