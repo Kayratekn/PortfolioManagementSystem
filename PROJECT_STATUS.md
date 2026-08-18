@@ -6,7 +6,7 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. Official TEFAS fund risk-value extraction is merged. Multi-kind scheduled daily TEFAS synchronization for YAT, EMK, BYF, GYF and GSYF is implemented on the current feature branch and verified locally against TEFAS and PostgreSQL; PR/merge is still pending.
+- **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. Official TEFAS fund risk-value extraction is merged. Multi-kind scheduled daily TEFAS synchronization for YAT, EMK, BYF, GYF and GSYF is implemented, verified against TEFAS and PostgreSQL, and merged into main in PR #34.
 - **Status updated:** 2026-08-18
 
 ## Product summary
@@ -53,7 +53,7 @@ tests/
 | Transaction domain | Not started / deferred | Transaction vertical slice has not been the current focus; do not start it before the active TEFAS/data task is closed |
 | TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown and fund-detail page data are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
-| TEFAS scheduled daily sync | Implemented / locally verified | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; PR/merge pending |
+| TEFAS scheduled daily sync | Complete / merged | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; merged in PR #34 |
 | TEFAS detail snapshot | Implemented | Includes fund category, 1-year category rank, category fund count, raw market-share value and official TEFAS risk value |
 | TEFAS portfolio allocation | Implemented / validated | 54 raw allocation fields observed; 43 mapped by same-date raw/UI verification; 11 preserved as unresolved/unobserved raw fields |
 | TEFAS derived metrics | Implemented | Daily, five-observation and one-month performance/evolution metrics are available for the implemented raw series |
@@ -239,11 +239,10 @@ Important verified checkpoints include:
 - **PR #30** — finalize TEFAS capability/gap analysis documentation; merged.
 - **PR #31** - refresh `PROJECT_STATUS.md`; merged.
 - **TEFAS risk-value feature** - official `riskDegeri` extraction, snapshot persistence and migration `20260817_0008`; merged.
-- **TEFAS multi-kind scheduled daily sync** - YAT, EMK, BYF, GYF and GSYF bulk daily synchronization implemented and locally verified on `kayra/tefas-multi-kind-scheduled-sync`; PR/merge pending.
+- **PR #34** - multi-kind scheduled daily TEFAS synchronization for YAT, EMK, BYF, GYF and GSYF; merged.
 - **Canonical branch:** `main`
 - **Risk-value merge commit:** `5acb46c`
-- **Current feature branch:** `kayra/tefas-multi-kind-scheduled-sync`
-- **Working tree:** scheduled-sync implementation, tests and `PROJECT_STATUS.md` changes passed final verification and are pending commit/PR.
+- **Multi-kind scheduled-sync merge commit:** `9ce2fda`
 
 ## Current data-team handoff status
 
@@ -263,27 +262,18 @@ Final high-level classification:
 
 ## Immediate next backend steps
 
-Work in small controlled increments. Do not start a new backend feature until the current scheduled-sync slice is merged and the repository is clean.
+Work in small controlled increments. The multi-kind scheduled daily TEFAS sync is complete and merged.
 
-1. **Finalize multi-kind scheduled daily TEFAS sync**
-   - Keep the verified default scope as `YAT`, `EMK`, `BYF`, `GYF` and `GSYF`.
-   - Preserve fund-kind-level bulk requests; do not introduce one-request-per-fund daily synchronization.
-   - Keep the existing behavior where an explicit `--kind` runs only that fund kind.
-   - Keep `--fund-code` dependent on an explicitly supplied `--kind`.
-   - Run the focused scheduled-sync tests and the full backend test suite.
-   - Review `git diff --check` and the final changed files.
-   - Commit, push and merge through a PR.
-   - Return local `main` to `origin/main` after merge and remove the completed feature branch.
+1. **Select the next backend/data-contract task**
+   - Keep the verified daily `YAT`, `EMK`, `BYF`, `GYF` and `GSYF` bulk sync stable.
+   - The data team is handling the five-year historical bulk dataset; do not duplicate that collection work in this backend slice.
+   - Review the remaining TEFAS/data-contract gaps and choose the highest-value unresolved backend task.
 
-2. **After scheduled sync is merged**
-   - Record the merged state and PR/commit information in this file.
-   - Keep the five-year historical bulk-data collection outside this backend slice; the data team is handling that historical dataset.
-   - The backend responsibility for this slice is the ongoing daily collection and persistence of current TEFAS data across all five supported fund kinds.
-   - Then review the remaining TEFAS/data-contract gaps and select the next highest-value backend task before implementing anything.
-
-3. **Do not start unrelated domains yet**
-   - Do not jump directly into Transaction development while TEFAS/data-contract work still has an explicitly selected higher-priority task.
-   - Continue with source/code discovery before every new implementation slice.
+2. **Before the next implementation**
+   - Perform source/code discovery first.
+   - Define the smallest correct implementation slice.
+   - Run focused tests and the full suite before PR.
+   - Do not jump directly into Transaction development without an explicit priority decision.
 
 ## Current open decisions / remaining data gaps
 
