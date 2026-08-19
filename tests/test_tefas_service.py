@@ -1124,6 +1124,26 @@ def test_get_fund_detail_page_metadata_parses_matching_profil_data_risk_value() 
     assert result.risk_value == 1
 
 
+def test_get_fund_detail_page_metadata_ignores_next_reference_profil_data_string() -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        '"profilData":{"fonKodu":"AAL","isinKodu":"TRMAALWWWWW5","riskDegeri":1}'
+        "}}}"
+        "</script>"
+        "<script>"
+        '{"props":{"pageProps":{'
+        '"profilData":"$3d:props:children:0:props:children:props:profilData"'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.risk_value == 1
+
 def test_get_fund_detail_page_metadata_ignores_unidentified_profil_data() -> None:
     service, _ = _service_with_detail_page_html(
         "<html><script>"

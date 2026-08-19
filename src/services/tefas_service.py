@@ -558,12 +558,27 @@ class TefasService:
                 continue
 
             if not isinstance(parsed_value, dict):
+                if TefasService._is_next_reference_marker_value(
+                    parsed_value,
+                    marker_name=marker_name,
+                ):
+                    search_start = json_start_index + decoded_length
+                    continue
+
                 raise TefasServiceError(
                     f"TEFAS detail-analysis {marker_name} must be an object."
                 )
 
             objects.append(parsed_value)
             search_start = json_start_index + decoded_length
+
+    @staticmethod
+    def _is_next_reference_marker_value(value: Any, *, marker_name: str) -> bool:
+        return (
+            isinstance(value, str)
+            and value.startswith("$")
+            and value.endswith(f":{marker_name}")
+        )
 
     @staticmethod
     def _extract_result_list(
