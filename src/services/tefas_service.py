@@ -53,6 +53,7 @@ class TefasFundDetailPageMetadataResult:
     category_rank: int | None
     category_fund_count: int | None
     market_share_raw: Decimal | None
+    isin: str | None = None
     risk_value: int | None = None
     source_page: str = "fon-detayli-analiz"
     source_field_names: tuple[str, ...] = (
@@ -61,6 +62,7 @@ class TefasFundDetailPageMetadataResult:
         "kategoriDerece",
         "kategoriFonSay",
         "pazarPayi",
+        "isinKodu",
         "riskDegeri",
     )
 
@@ -228,6 +230,10 @@ class TefasService:
             market_share_raw=self._normalize_optional_decimal(
                 bilgi_data.get("pazarPayi"),
                 field_name="market_share_raw",
+            ),
+            isin=self._normalize_optional_isin(
+                profil_data.get("isinKodu"),
+                field_name="isin",
             ),
             risk_value=self._normalize_optional_risk_value(
                 profil_data.get("riskDegeri"),
@@ -688,6 +694,20 @@ class TefasService:
 
         if uppercase:
             normalized_value = normalized_value.upper()
+
+        return normalized_value
+
+    @staticmethod
+    def _normalize_optional_isin(value: Any, *, field_name: str) -> str | None:
+        if value is None:
+            return None
+
+        if not isinstance(value, str):
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        normalized_value = value.strip().upper()
+        if not normalized_value:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
 
         return normalized_value
 
