@@ -26,7 +26,25 @@ def test_asset_can_be_inserted_with_expected_defaults(db_session: Session) -> No
 
     assert asset.id is not None
     assert asset.is_active is True
+    assert asset.isin is None
     assert asset.currency is None
+
+
+def test_asset_can_persist_explicit_isin(db_session: Session) -> None:
+    asset = Asset(
+        asset_code="AAL",
+        asset_name="Example Fund",
+        asset_type="FUND",
+        fund_kind="YAT",
+        isin="TRMAALWWWWW5",
+        data_source="TEFAS",
+    )
+
+    db_session.add(asset)
+    db_session.commit()
+    db_session.refresh(asset)
+
+    assert asset.isin == "TRMAALWWWWW5"
 
 
 def test_asset_unique_constraint_rejects_same_data_source_and_asset_code(db_session: Session) -> None:
