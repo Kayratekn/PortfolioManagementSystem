@@ -218,10 +218,12 @@ Important verified checkpoints include:
 - TEFAS fund-kind and daily-column discovery covered `YAT`, `EMK`, `BYF`, `GYF` and `GSYF`.
 - Portfolio-allocation raw/UI verification produced 43 verified mappings.
 - The 11 unresolved allocation fields were scanned across 12,476 raw rows without a non-zero observation.
-- TEFAS detail-page extraction for `fund_category`, `category_rank`, `category_fund_count`, `market_share_raw` and `risk_value` is covered by automated tests.
+- TEFAS detail-page extraction for `fund_category`, `category_rank`, `category_fund_count`, `market_share_raw`, `isin` and `risk_value` is covered by automated tests.
 - Official risk value is extracted only from exact matching `profilData["fonKodu"]` and `profilData["riskDegeri"]`; unidentified or other-fund profile data is ignored.
 - TEFAS detail-page parsing ignores Next.js reference-string marker occurrences such as `$...:profilData` while preserving strict handling for other decoded non-object marker values.
 - Live AAL detail-page smoke verification after this parser robustness change returned `fund_category=Para Piyasası Fonu` and `risk_value=1`.
+- TEFAS ISIN is source-confirmed from exact-matching `profilData["isinKodu"]`; missing values normalize to `None`, while present string values are trimmed and uppercased.
+- Live ISIN extraction was verified through the service layer for sample YAT, EMK, BYF, GYF and GSYF funds.
 - Migration `20260817_0008` adds nullable `risk_value` with a database check constraint limiting non-null values to 1..7.
 - Fresh SQLite `alembic upgrade head` passed through revision `20260817_0008`.
 - SQLite migration round-trip `0008 -> 0007 -> 0008` passed.
@@ -231,8 +233,8 @@ Important verified checkpoints include:
 - The scheduled flow uses fund-kind-level bulk general-info requests rather than one request per fund.
 - Real TEFAS/PostgreSQL smoke test for 2026-08-17 persisted: YAT 2033, EMK 400, BYF 30, GYF 255 and GSYF 539 funds; 3257 TEFAS fund assets were present after the sync.
 - Focused scheduled-sync test suite: **20 passed**.
-- Current full backend test-suite result: **538 passed**.
-- `git diff --check` passed for the current TEFAS detail-page parser robustness change.
+- Current full backend test-suite result: **545 passed**.
+- `git diff --check` passed for the current TEFAS ISIN metadata-extraction change.
 - Short-term evolution metrics were implemented and merged in PR #29.
 
 ## Recent Git milestones
@@ -281,7 +283,7 @@ Work in small controlled increments. The multi-kind scheduled daily TEFAS sync i
 
 Remaining TEFAS/data gaps to consider when selecting the next task:
 
-- Stable extraction path for other site-visible fields such as ISIN, platform status, transaction times, commissions and interest-content information.
+- Asset-level ISIN persistence/enrichment strategy remains to be implemented; TEFAS extraction from exact-matching `profilData["isinKodu"]` is now verified. Stable extraction paths for platform status, transaction times, commissions and interest-content information remain unresolved.
 - Exact business mapping across the multiple TEFAS classification structures.
 - Verified TEFAS source for management fee.
 - Official benchmark field vs comparison-series semantics.

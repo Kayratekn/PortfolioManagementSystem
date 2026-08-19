@@ -1095,6 +1095,7 @@ def test_get_fund_detail_page_metadata_parses_aal_bilgi_data() -> None:
     assert result.category_rank == 71
     assert result.category_fund_count == 84
     assert result.market_share_raw == Decimal("0.11")
+    assert result.isin is None
     assert result.risk_value is None
     assert result.source_page == "fon-detayli-analiz"
     assert result.source_field_names == (
@@ -1103,6 +1104,7 @@ def test_get_fund_detail_page_metadata_parses_aal_bilgi_data() -> None:
         "kategoriDerece",
         "kategoriFonSay",
         "pazarPayi",
+        "isinKodu",
         "riskDegeri",
     )
     assert fake_client.detail_page_calls == [{"fund_code": "AAL"}]
@@ -1124,6 +1126,76 @@ def test_get_fund_detail_page_metadata_parses_matching_profil_data_risk_value() 
     assert result.risk_value == 1
 
 
+def test_get_fund_detail_page_metadata_parses_matching_profil_data_isin() -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        '"profilData":{"fonKodu":"AAL","isinKodu":"TRMAALWWWWW5","riskDegeri":"1"}'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.isin == "TRMAALWWWWW5"
+    assert result.risk_value == 1
+
+
+def test_get_fund_detail_page_metadata_allows_null_or_missing_isin() -> None:
+    for profil_data_json in [
+        '{"fonKodu":"AAL","isinKodu":null,"riskDegeri":"1"}',
+        '{"fonKodu":"AAL","riskDegeri":"1"}',
+    ]:
+        service, _ = _service_with_detail_page_html(
+            "<html><script>"
+            '{"props":{"pageProps":{'
+            '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+            f'"profilData":{profil_data_json}'
+            "}}}"
+            "</script></html>"
+        )
+
+        result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+        assert result.isin is None
+        assert result.risk_value == 1
+
+
+def test_get_fund_detail_page_metadata_normalizes_isin_whitespace_and_case() -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        '"profilData":{"fonKodu":"AAL","isinKodu":" trmaalwwwww5 ","riskDegeri":"1"}'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.isin == "TRMAALWWWWW5"
+
+
+@pytest.mark.parametrize("isin_value", ["", "   ", 123, True])
+def test_get_fund_detail_page_metadata_rejects_invalid_isin(isin_value: object) -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        f'"profilData":{{"fonKodu":"AAL","isinKodu":{json.dumps(isin_value)},"riskDegeri":"1"}}'
+        "}}}"
+        "</script></html>"
+    )
+
+    with pytest.raises(TefasServiceError, match="isin"):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
 def test_get_fund_detail_page_metadata_ignores_next_reference_profil_data_string() -> None:
     service, _ = _service_with_detail_page_html(
         "<html><script>"
@@ -1143,6 +1215,7 @@ def test_get_fund_detail_page_metadata_ignores_next_reference_profil_data_string
     result = service.get_fund_detail_page_metadata(fund_code="AAL")
 
     assert result.risk_value == 1
+
 
 def test_get_fund_detail_page_metadata_ignores_unidentified_profil_data() -> None:
     service, _ = _service_with_detail_page_html(
