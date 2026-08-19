@@ -121,6 +121,85 @@ def test_observe_fund_detail_snapshot_creates_snapshot_for_active_tefas_asset(
     assert tefas_service.calls == ["AAL"]
 
 
+def test_observe_fund_detail_snapshot_enriches_null_asset_isin_for_new_snapshot(
+    db_session: Session,
+) -> None:
+    asset = _add_asset(db_session)
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=FakeTefasService(_metadata(isin="TRMAALWWWWW5")),
+    )
+
+    snapshot = service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    db_session.refresh(asset)
+    assert snapshot.id is not None
+    assert asset.isin == "TRMAALWWWWW5"
+
+
+def test_observe_fund_detail_snapshot_leaves_asset_isin_unchanged_when_metadata_isin_missing(
+    db_session: Session,
+) -> None:
+    asset = _add_asset(db_session, isin="EXISTINGISIN")
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=FakeTefasService(_metadata(isin=None)),
+    )
+
+    service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    db_session.refresh(asset)
+    assert asset.isin == "EXISTINGISIN"
+
+
+def test_observe_fund_detail_snapshot_accepts_matching_existing_asset_isin(
+    db_session: Session,
+) -> None:
+    asset = _add_asset(db_session, isin="TRMAALWWWWW5")
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=FakeTefasService(_metadata(isin="TRMAALWWWWW5")),
+    )
+
+    snapshot = service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    db_session.refresh(asset)
+    assert snapshot.id is not None
+    assert asset.isin == "TRMAALWWWWW5"
+
+
+def test_observe_fund_detail_snapshot_rejects_conflicting_asset_isin_and_preserves_old_value(
+    db_session: Session,
+) -> None:
+    asset = _add_asset(db_session, isin="OLDISIN")
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=FakeTefasService(_metadata(isin="TRMAALWWWWW5")),
+    )
+
+    with pytest.raises(
+        TefasFundDetailSnapshotObservationServiceError,
+        match="Conflicting TEFAS asset ISIN metadata",
+    ):
+        service.observe_fund_detail_snapshot(
+            fund_code="AAL",
+            observed_at=OBSERVED_AT,
+        )
+
+    db_session.refresh(asset)
+    assert asset.isin == "OLDISIN"
+    assert _list_snapshots(db_session) == []
+
+
 def test_observe_fund_detail_snapshot_normalizes_fund_code(
     db_session: Session,
 ) -> None:
@@ -225,6 +304,34 @@ def test_observe_fund_detail_snapshot_is_idempotent_for_identical_same_timestamp
     assert second_snapshot.id == first_snapshot.id
     assert [snapshot.id for snapshot in snapshots] == [first_snapshot.id]
     assert tefas_service.calls == ["AAL", "AAL"]
+
+
+def test_observe_fund_detail_snapshot_enriches_isin_for_existing_identical_snapshot_without_duplicate(
+    db_session: Session,
+) -> None:
+    asset = _add_asset(db_session)
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=FakeTefasService(
+            _metadata(isin=None),
+            _metadata(isin="TRMAALWWWWW5"),
+        ),
+    )
+    first_snapshot = service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    second_snapshot = service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    db_session.refresh(asset)
+    snapshots = _list_snapshots(db_session)
+    assert second_snapshot.id == first_snapshot.id
+    assert [snapshot.id for snapshot in snapshots] == [first_snapshot.id]
+    assert asset.isin == "TRMAALWWWWW5"
 
 
 def test_observe_fund_detail_snapshot_rejects_conflicting_same_timestamp_metadata(
@@ -388,6 +495,29 @@ def test_observe_fund_detail_snapshot_rolls_back_when_repository_add_fails(
         )
 
     assert rollback_calls == 1
+    assert _list_snapshots(db_session) == []
+
+
+def test_observe_fund_detail_snapshot_rolls_back_asset_isin_when_repository_add_fails(
+    db_session: Session,
+) -> None:
+    asset = _add_asset(db_session)
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        detail_snapshot_repository=FailingDetailSnapshotRepository(db_session),
+        tefas_service=FakeTefasService(_metadata(isin="TRMAALWWWWW5")),
+    )
+
+    with pytest.raises(RuntimeError, match="snapshot add failed"):
+        service.observe_fund_detail_snapshot(
+            fund_code="AAL",
+            observed_at=OBSERVED_AT,
+        )
+
+    db_session.expire_all()
+    persisted_asset = db_session.get(Asset, asset.id)
+    assert persisted_asset is not None
+    assert persisted_asset.isin is None
     assert _list_snapshots(db_session) == []
 
 

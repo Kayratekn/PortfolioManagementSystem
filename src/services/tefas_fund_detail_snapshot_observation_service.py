@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from src.model.asset import Asset
 from src.model.tefas_fund_detail_snapshot import TefasFundDetailSnapshot
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.tefas_fund_detail_snapshot_repository import (
@@ -54,6 +55,11 @@ class TefasFundDetailSnapshotObservationService:
             metadata = self.tefas_service.get_fund_detail_page_metadata(
                 fund_code=normalized_fund_code,
             )
+            isin_changed = _enrich_asset_isin_from_metadata(
+                asset=asset,
+                metadata_isin=metadata.isin,
+                fund_code=normalized_fund_code,
+            )
             existing_snapshot = self.detail_snapshot_repository.get_by_asset_and_observed_at(
                 asset_id=asset.id,
                 observed_at=resolved_observed_at,
@@ -69,6 +75,8 @@ class TefasFundDetailSnapshotObservationService:
                     risk_value=metadata.risk_value,
                     source_page=metadata.source_page,
                 )
+                if isin_changed:
+                    self.db.commit()
                 return existing_snapshot
 
             snapshot = TefasFundDetailSnapshot(
@@ -88,6 +96,28 @@ class TefasFundDetailSnapshotObservationService:
             raise
 
         return snapshot
+
+
+def _enrich_asset_isin_from_metadata(
+    *,
+    asset: Asset,
+    metadata_isin: str | None,
+    fund_code: str,
+) -> bool:
+    if metadata_isin is None:
+        return False
+
+    if asset.isin is None:
+        asset.isin = metadata_isin
+        return True
+
+    if asset.isin == metadata_isin:
+        return False
+
+    raise TefasFundDetailSnapshotObservationServiceError(
+        "Conflicting TEFAS asset ISIN metadata: "
+        f"fund_code={fund_code}, asset_isin={asset.isin}, metadata_isin={metadata_isin}"
+    )
 
 
 def _normalize_fund_code(fund_code: str) -> str:

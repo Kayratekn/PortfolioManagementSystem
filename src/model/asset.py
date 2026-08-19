@@ -21,6 +21,7 @@ class Asset(TimestampMixin, Base):
     asset_name: Mapped[str] = mapped_column(String(255), nullable=False)
     asset_type: Mapped[str] = mapped_column(String(30), nullable=False)
     fund_kind: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    isin: Mapped[str | None] = mapped_column(String(32), nullable=True)
     currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     data_source: Mapped[str] = mapped_column(String(20), nullable=False)
     is_active: Mapped[bool] = mapped_column(

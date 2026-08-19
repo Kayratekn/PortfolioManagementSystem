@@ -49,7 +49,7 @@ tests/
 | Alembic migrations | Active / working | PostgreSQL migration flow is established and used for implemented domains |
 | User/authentication domain | Complete | Register, login, current-user flow, password hashing and JWT validation are implemented |
 | Portfolio domain | Complete | CRUD, ownership isolation, pagination and soft delete are implemented and tested |
-| Asset/data foundation | Implemented | Asset-linked TEFAS snapshots and related repositories/services/tests now exist; Asset is no longer an unstarted area |
+| Asset/data foundation | Implemented | Asset-linked TEFAS snapshots and related repositories/services/tests exist; nullable Asset-level ISIN metadata persistence/enrichment is implemented |
 | Transaction domain | Not started / deferred | Transaction vertical slice has not been the current focus; do not start it before the active TEFAS/data task is closed |
 | TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown and fund-detail page data are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
@@ -224,6 +224,11 @@ Important verified checkpoints include:
 - Live AAL detail-page smoke verification after this parser robustness change returned `fund_category=Para Piyasası Fonu` and `risk_value=1`.
 - TEFAS ISIN is source-confirmed from exact-matching `profilData["isinKodu"]`; missing values normalize to `None`, while present string values are trimmed and uppercased.
 - Live ISIN extraction was verified through the service layer for sample YAT, EMK, BYF, GYF and GSYF funds.
+- `Asset.isin` is nullable `String(32)` metadata added by migration `20260819_0009`; no unique, index or format constraint is imposed at this stage.
+- Fund-detail observation enriches a missing Asset ISIN from already-fetched TEFAS metadata without making an additional provider request; matching values are accepted and conflicting non-null values raise instead of being silently overwritten.
+- Asset ISIN enrichment and new snapshot persistence share the same transaction; rollback behavior is covered by tests, including snapshot persistence failure.
+- Focused Asset/observation-service test suite: **27 passed**.
+- Fresh SQLite migration upgrade through `20260819_0009` passed, and migration round-trip `0009 -> 0008 -> 0009` passed.
 - Migration `20260817_0008` adds nullable `risk_value` with a database check constraint limiting non-null values to 1..7.
 - Fresh SQLite `alembic upgrade head` passed through revision `20260817_0008`.
 - SQLite migration round-trip `0008 -> 0007 -> 0008` passed.
@@ -233,8 +238,8 @@ Important verified checkpoints include:
 - The scheduled flow uses fund-kind-level bulk general-info requests rather than one request per fund.
 - Real TEFAS/PostgreSQL smoke test for 2026-08-17 persisted: YAT 2033, EMK 400, BYF 30, GYF 255 and GSYF 539 funds; 3257 TEFAS fund assets were present after the sync.
 - Focused scheduled-sync test suite: **20 passed**.
-- Current full backend test-suite result: **545 passed**.
-- `git diff --check` passed for the current TEFAS ISIN metadata-extraction change.
+- Current full backend test-suite result: **552 passed**.
+- `git diff --check` passed for the current Asset ISIN persistence/enrichment change.
 - Short-term evolution metrics were implemented and merged in PR #29.
 
 ## Recent Git milestones
@@ -283,7 +288,7 @@ Work in small controlled increments. The multi-kind scheduled daily TEFAS sync i
 
 Remaining TEFAS/data gaps to consider when selecting the next task:
 
-- Asset-level ISIN persistence/enrichment strategy remains to be implemented; TEFAS extraction from exact-matching `profilData["isinKodu"]` is now verified. Stable extraction paths for platform status, transaction times, commissions and interest-content information remain unresolved.
+- TEFAS ISIN extraction and Asset-level opportunistic persistence/enrichment are implemented. A separate whole-universe ISIN backfill strategy is intentionally not part of the daily bulk sync. Stable extraction paths for platform status, transaction times, commissions and interest-content information remain unresolved.
 - Exact business mapping across the multiple TEFAS classification structures.
 - Verified TEFAS source for management fee.
 - Official benchmark field vs comparison-series semantics.
