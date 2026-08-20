@@ -60,6 +60,14 @@ class TefasFundDetailPageMetadataResult:
     market_share_raw: Decimal | None
     isin: str | None = None
     risk_value: int | None = None
+    tefas_status: str | None = None
+    transaction_start_time: str | None = None
+    transaction_end_time: str | None = None
+    entry_commission_raw: Decimal | None = None
+    exit_commission_raw: Decimal | None = None
+    interest_content: str | None = None
+    fund_sale_valor: int | None = None
+    fund_redemption_valor: int | None = None
     source_page: str = "fon-detayli-analiz"
     source_field_names: tuple[str, ...] = (
         "fonKodu",
@@ -69,6 +77,14 @@ class TefasFundDetailPageMetadataResult:
         "pazarPayi",
         "isinKodu",
         "riskDegeri",
+        "tefasDurum",
+        "basIsSaat",
+        "sonIsSaat",
+        "girisKomisyonu",
+        "cikisKomisyonu",
+        "faizIcerigi",
+        "fonSatisValor",
+        "fonGeriAlisValor",
     )
 
 
@@ -252,6 +268,38 @@ class TefasService:
             risk_value=self._normalize_optional_risk_value(
                 profil_data.get("riskDegeri"),
                 field_name="risk_value",
+            ),
+            tefas_status=self._normalize_optional_trimmed_string(
+                profil_data.get("tefasDurum"),
+                field_name="tefas_status",
+            ),
+            transaction_start_time=self._normalize_optional_trimmed_string(
+                profil_data.get("basIsSaat"),
+                field_name="transaction_start_time",
+            ),
+            transaction_end_time=self._normalize_optional_trimmed_string(
+                profil_data.get("sonIsSaat"),
+                field_name="transaction_end_time",
+            ),
+            entry_commission_raw=self._normalize_optional_finite_decimal(
+                profil_data.get("girisKomisyonu"),
+                field_name="entry_commission_raw",
+            ),
+            exit_commission_raw=self._normalize_optional_finite_decimal(
+                profil_data.get("cikisKomisyonu"),
+                field_name="exit_commission_raw",
+            ),
+            interest_content=self._normalize_optional_trimmed_string(
+                profil_data.get("faizIcerigi"),
+                field_name="interest_content",
+            ),
+            fund_sale_valor=self._normalize_optional_integral_int(
+                profil_data.get("fonSatisValor"),
+                field_name="fund_sale_valor",
+            ),
+            fund_redemption_valor=self._normalize_optional_integral_int(
+                profil_data.get("fonGeriAlisValor"),
+                field_name="fund_redemption_valor",
             ),
         )
 
@@ -784,6 +832,20 @@ class TefasService:
         return normalized_value
 
     @staticmethod
+    def _normalize_optional_trimmed_string(value: Any, *, field_name: str) -> str | None:
+        if value is None:
+            return None
+
+        if not isinstance(value, str):
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        normalized_value = value.strip()
+        if not normalized_value:
+            return None
+
+        return normalized_value
+
+    @staticmethod
     def _normalize_optional_isin(value: Any, *, field_name: str) -> str | None:
         if value is None:
             return None
@@ -829,6 +891,24 @@ class TefasService:
             return Decimal(str(value))
         except (InvalidOperation, ValueError, TypeError) as exc:
             raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+    @staticmethod
+    def _normalize_optional_finite_decimal(value: Any, *, field_name: str) -> Decimal | None:
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        try:
+            normalized_value = Decimal(str(value))
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+        if not normalized_value.is_finite():
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        return normalized_value
 
     @staticmethod
     def _normalize_optional_int(value: Any, *, field_name: str) -> int | None:

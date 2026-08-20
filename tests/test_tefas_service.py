@@ -1248,6 +1248,14 @@ def test_get_fund_detail_page_metadata_parses_aal_bilgi_data() -> None:
         "pazarPayi",
         "isinKodu",
         "riskDegeri",
+        "tefasDurum",
+        "basIsSaat",
+        "sonIsSaat",
+        "girisKomisyonu",
+        "cikisKomisyonu",
+        "faizIcerigi",
+        "fonSatisValor",
+        "fonGeriAlisValor",
     )
     assert fake_client.detail_page_calls == [{"fund_code": "AAL"}]
 
@@ -1283,6 +1291,209 @@ def test_get_fund_detail_page_metadata_parses_matching_profil_data_isin() -> Non
 
     assert result.isin == "TRMAALWWWWW5"
     assert result.risk_value == 1
+
+
+def test_get_fund_detail_page_metadata_parses_profile_metadata_from_profil_data() -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        '"profilData":{"fonKodu":"AAL","tefasDurum":" TEFAS/BEFAS ",'
+        '"basIsSaat":" 09:00 ","sonIsSaat":" 17:30 ",'
+        '"girisKomisyonu":3,"cikisKomisyonu":"0.5",'
+        '"faizIcerigi":" Faiz \u0130\u00e7erir ",'
+        '"fonSatisValor":0,"fonGeriAlisValor":3}'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.tefas_status == "TEFAS/BEFAS"
+    assert result.transaction_start_time == "09:00"
+    assert result.transaction_end_time == "17:30"
+    assert result.entry_commission_raw == Decimal("3")
+    assert result.exit_commission_raw == Decimal("0.5")
+    assert result.interest_content == "Faiz \u0130\u00e7erir"
+    assert result.fund_sale_valor == 0
+    assert result.fund_redemption_valor == 3
+
+
+def test_get_fund_detail_page_metadata_preserves_commission_magnitude() -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        '"profilData":{"fonKodu":"AAL","girisKomisyonu":3}'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.entry_commission_raw == Decimal("3")
+    assert result.entry_commission_raw != Decimal("0.03")
+
+
+@pytest.mark.parametrize(
+    ("status", "interest_content"),
+    [
+        ("TEFAS", "Faiz \u0130\u00e7erir"),
+        ("BEFAS", "Faiz \u0130\u00e7ermez"),
+        ("TEFAS/BEFAS", "Faiz \u0130\u00e7erir"),
+    ],
+)
+def test_get_fund_detail_page_metadata_preserves_profile_status_and_interest_strings(
+    status: str,
+    interest_content: str,
+) -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        f'"profilData":{{"fonKodu":"AAL","tefasDurum":{json.dumps(status)},'
+        f'"faizIcerigi":{json.dumps(interest_content)}}}'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.tefas_status == status
+    assert result.interest_content == interest_content
+
+
+@pytest.mark.parametrize(
+    ("sale_valor", "redemption_valor"),
+    [(0, 1), (2, 3), (None, None)],
+)
+def test_get_fund_detail_page_metadata_parses_nullable_profile_valors(
+    sale_valor: int | None,
+    redemption_valor: int | None,
+) -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        f'"profilData":{{"fonKodu":"AAL","fonSatisValor":{json.dumps(sale_valor)},'
+        f'"fonGeriAlisValor":{json.dumps(redemption_valor)}}}'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.fund_sale_valor == sale_valor
+    assert result.fund_redemption_valor == redemption_valor
+
+
+def test_get_fund_detail_page_metadata_allows_null_or_missing_profile_metadata() -> None:
+    for profil_data_json in [
+        '{"fonKodu":"AAL","tefasDurum":null,"basIsSaat":null,"sonIsSaat":null,'
+        '"girisKomisyonu":null,"cikisKomisyonu":null,"faizIcerigi":null,'
+        '"fonSatisValor":null,"fonGeriAlisValor":null}',
+        '{"fonKodu":"AAL"}',
+    ]:
+        service, _ = _service_with_detail_page_html(
+            "<html><script>"
+            '{"props":{"pageProps":{'
+            '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+            '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+            f'"profilData":{profil_data_json}'
+            "}}}"
+            "</script></html>"
+        )
+
+        result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+        assert result.tefas_status is None
+        assert result.transaction_start_time is None
+        assert result.transaction_end_time is None
+        assert result.entry_commission_raw is None
+        assert result.exit_commission_raw is None
+        assert result.interest_content is None
+        assert result.fund_sale_valor is None
+        assert result.fund_redemption_valor is None
+
+
+def test_get_fund_detail_page_metadata_ignores_profile_metadata_from_other_fund() -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        '"profilData":{"fonKodu":"BA1","tefasDurum":"TEFAS","basIsSaat":"09:00",'
+        '"sonIsSaat":"17:30","girisKomisyonu":3,"cikisKomisyonu":3,'
+        '"faizIcerigi":"Faiz \u0130\u00e7erir",'
+        '"fonSatisValor":1,"fonGeriAlisValor":2}'
+        "}}}"
+        "</script></html>"
+    )
+
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
+
+    assert result.tefas_status is None
+    assert result.transaction_start_time is None
+    assert result.transaction_end_time is None
+    assert result.entry_commission_raw is None
+    assert result.exit_commission_raw is None
+    assert result.interest_content is None
+    assert result.fund_sale_valor is None
+    assert result.fund_redemption_valor is None
+
+
+@pytest.mark.parametrize("field_name", ["girisKomisyonu", "cikisKomisyonu"])
+@pytest.mark.parametrize("raw_value", [True, False, "bad", "NaN", "Infinity"])
+def test_get_fund_detail_page_metadata_rejects_invalid_profile_commission_values(
+    field_name: str,
+    raw_value: object,
+) -> None:
+    expected_field_name = (
+        "entry_commission_raw"
+        if field_name == "girisKomisyonu"
+        else "exit_commission_raw"
+    )
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        f'"profilData":{{"fonKodu":"AAL",{json.dumps(field_name)}:{json.dumps(raw_value)}}}'
+        "}}}"
+        "</script></html>"
+    )
+
+    with pytest.raises(TefasServiceError, match=expected_field_name):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+@pytest.mark.parametrize("field_name", ["fonSatisValor", "fonGeriAlisValor"])
+@pytest.mark.parametrize("raw_value", [True, False, "1.5", 1.5, "bad"])
+def test_get_fund_detail_page_metadata_rejects_invalid_profile_valor_values(
+    field_name: str,
+    raw_value: object,
+) -> None:
+    expected_field_name = (
+        "fund_sale_valor"
+        if field_name == "fonSatisValor"
+        else "fund_redemption_valor"
+    )
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        f'"profilData":{{"fonKodu":"AAL",{json.dumps(field_name)}:{json.dumps(raw_value)}}}'
+        "}}}"
+        "</script></html>"
+    )
+
+    with pytest.raises(TefasServiceError, match=expected_field_name):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
 
 
 def test_get_fund_detail_page_metadata_allows_null_or_missing_isin() -> None:

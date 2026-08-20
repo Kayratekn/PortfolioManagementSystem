@@ -51,7 +51,7 @@ tests/
 | Portfolio domain | Complete | CRUD, ownership isolation, pagination and soft delete are implemented and tested |
 | Asset/data foundation | Implemented | Asset-linked TEFAS snapshots and related repositories/services/tests exist; nullable Asset-level ISIN metadata persistence/enrichment is implemented |
 | Transaction domain | Not started / deferred | Transaction vertical slice has not been the current focus; do not start it before the active TEFAS/data task is closed |
-| TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown, management-fee source extraction/history persistence and bulk refresh/history sync for YAT/EMK and fund-detail page data are used through the backend integration/service layer |
+| TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown, management-fee source extraction/history persistence and bulk refresh/history sync for YAT/EMK and fund-detail page/profile metadata are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
 | TEFAS scheduled daily sync | Complete / merged | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; merged in PR #34 |
 | TEFAS detail snapshot | Implemented | Includes fund category, 1-year category rank, category fund count, raw market-share value and official TEFAS risk value |
@@ -104,13 +104,22 @@ Important provider-specific behavior:
 
 ## TEFAS detail snapshot capability
 
-The backend detail snapshot currently preserves:
+The backend detail-page metadata extraction currently preserves source-oriented values for:
 
 - `fund_category`
 - `category_rank`
 - `category_fund_count`
 - `market_share_raw`
 - `risk_value`
+- `isin`
+- `tefas_status`
+- `transaction_start_time`
+- `transaction_end_time`
+- `entry_commission_raw`
+- `exit_commission_raw`
+- `interest_content`
+- `fund_sale_valor`
+- `fund_redemption_valor`
 
 `category_rank` / `category_fund_count` were validated against the TEFAS detail-analysis semantics as the current 1-year category ranking and category fund count.
 
@@ -241,8 +250,9 @@ Important verified checkpoints include:
 - Focused PR1 TEFAS management-fee client/service extraction tests: **132 passed**.
 - Focused TEFAS management-fee history persistence tests: **43 passed**.
 - Focused TEFAS management-fee bulk refresh/history sync tests: **57 passed**.
-- Current full backend test-suite result: **633 passed**.
-- `git diff --check` passed for the current TEFAS management-fee bulk refresh/history sync change.
+- Focused TEFAS detail-page profile metadata extraction tests: **141 passed**.
+- Current full backend test-suite result: **663 passed**.
+- `git diff --check` passed for the current TEFAS detail-page profile metadata extraction change.
 - Short-term evolution metrics were implemented and merged in PR #29.
 
 ## Recent Git milestones
@@ -291,12 +301,12 @@ Work in small controlled increments. The multi-kind scheduled daily TEFAS sync i
 
 Remaining TEFAS/data gaps to consider when selecting the next task:
 
-- TEFAS ISIN extraction and Asset-level opportunistic persistence/enrichment are implemented. A separate whole-universe ISIN backfill strategy is intentionally not part of the daily bulk sync. Stable extraction paths for platform status, transaction times, commissions and interest-content information remain unresolved.
+- TEFAS ISIN extraction and Asset-level opportunistic persistence/enrichment are implemented. A separate whole-universe ISIN backfill strategy is intentionally not part of the daily bulk sync. Detail-page `profilData` extraction for platform status, transaction times, raw commissions and interest-content is implemented; persistence and business interpretation remain intentionally deferred.
 - Exact business mapping across the multiple TEFAS classification structures.
 - YAT/EMK management-fee source extraction, history persistence and bulk refresh/history sync are implemented; scheduler/daily-sync/CLI/API integration and BYF/GYF/GSYF management-fee semantics remain intentionally deferred.
 - Official benchmark field vs comparison-series semantics.
 - Exact meaning of `getFplFonList.tarih`.
-- Settlement/value-date source strategy if TEFAS extraction is not stable.
+- Raw `fonSatisValor` / `fonGeriAlisValor` extraction from detail-page `profilData` is implemented; exact business semantics and user-facing settlement/value-date mapping remain unresolved.
 - Cross-endpoint authoritative price semantics for BYF and any other affected fund types.
 
 ## Local development commands
