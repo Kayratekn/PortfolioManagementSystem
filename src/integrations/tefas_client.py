@@ -21,6 +21,7 @@ class CustomTefasClient:
 
     GENERAL_INFO_ENDPOINT = "/api/funds/fonGnlBlgSiraliGetir"
     PORTFOLIO_BREAKDOWN_ENDPOINT = "/api/funds/dagilimSiraliGetirT"
+    MANAGEMENT_FEE_ENDPOINT = "/api/funds/fonYonetimBazliBilgiGetir"
     FUND_PROFILE_DETAIL_ENDPOINT = "/api/funds/fonProfilDtyGetir"
     FUND_DETAIL_ANALYSIS_PAGE_PATH = "/tr/fon-detayli-analiz"
 
@@ -119,6 +120,29 @@ class CustomTefasClient:
 
         return self._post_json(
             endpoint=self.FUND_PROFILE_DETAIL_ENDPOINT,
+            payload=payload,
+        )
+
+    def fetch_management_fee_info(
+        self,
+        *,
+        fund_kind: FundKind = "YAT",
+    ) -> dict[str, Any]:
+        """Fetch fund management-fee information from TEFAS."""
+
+        payload = {
+            "dil": "TR",
+            "fonTipi": fund_kind,
+            "kurucuKodu": None,
+            "sfonTurKod": None,
+            "fonTurAciklama": None,
+            "islem": None,
+            "fonTurKod": None,
+            "fonGrubu": None,
+        }
+
+        return self._post_json(
+            endpoint=self.MANAGEMENT_FEE_ENDPOINT,
             payload=payload,
         )
 

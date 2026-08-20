@@ -16,13 +16,16 @@ class FakeTefasClient:
         response: dict[str, Any],
         portfolio_response: dict[str, Any] | None = None,
         profile_response: dict[str, Any] | None = None,
+        management_fee_response: dict[str, Any] | None = None,
         detail_page_html: str = "",
     ) -> None:
         self.response = response
         self.portfolio_response = portfolio_response if portfolio_response is not None else response
         self.profile_response = profile_response if profile_response is not None else response
+        self.management_fee_response = management_fee_response if management_fee_response is not None else response
         self.detail_page_html = detail_page_html
         self.profile_detail_calls: list[dict[str, Any]] = []
+        self.management_fee_calls: list[dict[str, Any]] = []
         self.detail_page_calls: list[dict[str, Any]] = []
 
     def fetch_general_info(self, **kwargs: Any) -> dict[str, Any]:
@@ -34,6 +37,10 @@ class FakeTefasClient:
     def fetch_fund_profile_detail(self, **kwargs: Any) -> dict[str, Any]:
         self.profile_detail_calls.append(kwargs)
         return self.profile_response
+
+    def fetch_management_fee_info(self, **kwargs: Any) -> dict[str, Any]:
+        self.management_fee_calls.append(kwargs)
+        return self.management_fee_response
 
     def fetch_fund_detail_analysis_page(self, **kwargs: Any) -> str:
         self.detail_page_calls.append(kwargs)
@@ -1047,6 +1054,141 @@ def test_get_fund_type_uses_only_mocked_client_without_database_or_network() -> 
 
     assert result.fund_type_name == "Para Piyasasi Semsiye Fonu"
     assert fake_client.profile_detail_calls == [{"fund_code": "AAL"}]
+
+
+def _build_management_fee_row(
+    *,
+    fund_code: object = "AAL",
+    management_fee: object = "1",
+    fon_ic_tuzuk_fee: object = "99",
+    total_expense_ratio: object = "88",
+) -> dict[str, object]:
+    return {
+        "fonKodu": fund_code,
+        "uygulananYu1Y": management_fee,
+        "fonIcTuzukYu1G": fon_ic_tuzuk_fee,
+        "fonTopGiderKesoran": total_expense_ratio,
+    }
+
+
+def _service_with_management_fee_rows(
+    rows: list[dict[str, object]],
+) -> tuple[TefasService, FakeTefasClient]:
+    fake_client = FakeTefasClient(
+        response={"errorCode": None, "errorMessage": None, "resultList": []},
+        management_fee_response={
+            "errorCode": None,
+            "errorMessage": None,
+            "resultList": rows,
+        },
+    )
+    return TefasService(client=fake_client), fake_client  # type: ignore[arg-type]
+
+
+def test_fetch_management_fees_normalizes_rows_and_source_metadata() -> None:
+    service, fake_client = _service_with_management_fee_rows([
+        _build_management_fee_row(fund_code=" aal ", management_fee="0,85"),
+        _build_management_fee_row(fund_code="zpf", management_fee=",11"),
+    ])
+
+    result = service.fetch_management_fees(fund_kind="yat")  # type: ignore[arg-type]
+
+    assert [(item.fund_code, item.management_fee_percentage) for item in result] == [
+        ("AAL", Decimal("0.85")),
+        ("ZPF", Decimal("0.11")),
+    ]
+    assert result[0].fund_kind == "YAT"
+    assert result[0].raw_field_name == "uygulananYu1Y"
+    assert result[0].source_endpoint == "fonYonetimBazliBilgiGetir"
+    assert fake_client.management_fee_calls == [{"fund_kind": "YAT"}]
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "expected_value"),
+    [
+        ("1", Decimal("1")),
+        ("0,85", Decimal("0.85")),
+        (",11", Decimal("0.11")),
+        ("1,", Decimal("1")),
+    ],
+)
+def test_fetch_management_fees_preserves_percentage_point_semantics(
+    raw_value: object,
+    expected_value: Decimal,
+) -> None:
+    service, _ = _service_with_management_fee_rows([
+        _build_management_fee_row(management_fee=raw_value),
+    ])
+
+    result = service.fetch_management_fees(fund_kind="EMK")
+
+    assert result[0].management_fee_percentage == expected_value
+
+
+def test_fetch_management_fees_uses_only_uygulanan_yu1y_for_management_fee() -> None:
+    service, _ = _service_with_management_fee_rows([
+        _build_management_fee_row(
+            management_fee="1",
+            fon_ic_tuzuk_fee="0,01",
+            total_expense_ratio="0,02",
+        ),
+    ])
+
+    result = service.fetch_management_fees(fund_kind="YAT")
+
+    assert result[0].management_fee_percentage == Decimal("1")
+
+
+@pytest.mark.parametrize("fund_kind", ["BYF", "GYF", "GSYF"])
+def test_fetch_management_fees_rejects_unsupported_fund_kinds(fund_kind: str) -> None:
+    service, fake_client = _service_with_management_fee_rows([
+        _build_management_fee_row(),
+    ])
+
+    with pytest.raises(ValueError, match="YAT and EMK"):
+        service.fetch_management_fees(fund_kind=fund_kind)  # type: ignore[arg-type]
+
+    assert fake_client.management_fee_calls == []
+
+
+@pytest.mark.parametrize(
+    "raw_value",
+    [
+        None,
+        "",
+        "   ",
+        True,
+        False,
+        -1,
+        "-1",
+        "NaN",
+        "Infinity",
+        "1.25",
+        "1,2,3",
+        "1 2",
+        "abc",
+    ],
+)
+def test_fetch_management_fees_rejects_invalid_management_fee_values(
+    raw_value: object,
+) -> None:
+    service, _ = _service_with_management_fee_rows([
+        _build_management_fee_row(management_fee=raw_value),
+    ])
+
+    with pytest.raises(TefasServiceError, match="management_fee_percentage"):
+        service.fetch_management_fees(fund_kind="YAT")
+
+
+def test_fetch_management_fees_raises_on_duplicate_conflict() -> None:
+    service, _ = _service_with_management_fee_rows([
+        _build_management_fee_row(fund_code="AAL", management_fee="1"),
+        _build_management_fee_row(fund_code=" aal ", management_fee="0,85"),
+    ])
+
+    with pytest.raises(TefasServiceError, match="Conflicting duplicate"):
+        service.fetch_management_fees(fund_kind="YAT")
+
 
 def _detail_page_html(bilgi_data_json: str) -> str:
     return _detail_page_html_with_bilgi_data(bilgi_data_json)

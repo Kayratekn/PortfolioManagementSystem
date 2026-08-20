@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import html as html_module
 import json
+import re
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -25,6 +26,10 @@ GENERAL_INFO_MAX_CHUNK_DAYS = 28
 PORTFOLIO_BREAKDOWN_METADATA_FIELDS = frozenset(
     {"fonKodu", "fonUnvan", "tarih", "bilFiyat"}
 )
+
+
+SUPPORTED_MANAGEMENT_FEE_FUND_KINDS = frozenset({"YAT", "EMK"})
+TEFAS_MANAGEMENT_FEE_LOCALE_PATTERN = re.compile(r"^(?:\d+(?:,\d*)?|,\d+)$")
 
 
 @dataclass(frozen=True)
@@ -73,6 +78,15 @@ class TefasFundTypeResult:
     fund_type_name: str
     raw_field_name: str = "fonTuru"
     source_endpoint: str = "fonProfilDtyGetir"
+
+
+@dataclass(frozen=True)
+class TefasManagementFeeResult:
+    fund_code: str
+    management_fee_percentage: Decimal
+    fund_kind: str
+    raw_field_name: str = "uygulananYu1Y"
+    source_endpoint: str = "fonYonetimBazliBilgiGetir"
 
 
 class TefasService:
@@ -241,6 +255,37 @@ class TefasService:
             ),
         )
 
+    def fetch_management_fees(
+        self,
+        *,
+        fund_kind: FundKind = "YAT",
+    ) -> list[TefasManagementFeeResult]:
+        """Fetch applied annual management fees for supported TEFAS fund kinds."""
+
+        normalized_fund_kind = self._normalize_required_string(
+            fund_kind,
+            field_name="fund_kind",
+            uppercase=True,
+        )
+        if normalized_fund_kind not in SUPPORTED_MANAGEMENT_FEE_FUND_KINDS:
+            raise ValueError(
+                "management-fee extraction currently supports only YAT and EMK."
+            )
+
+        response = self.client.fetch_management_fee_info(
+            fund_kind=normalized_fund_kind,
+        )
+        rows = self._extract_result_list(response)
+        results = [
+            self._normalize_management_fee_row(
+                row=row,
+                fund_kind=normalized_fund_kind,
+            )
+            for row in rows
+        ]
+
+        return self._deduplicate_and_sort_management_fee_results(results)
+
     def get_fund_type(self, *, fund_code: str) -> TefasFundTypeResult:
         """Return the selected fund's source-oriented fonTuru value."""
 
@@ -281,6 +326,47 @@ class TefasService:
                 row.get("fonTuru"),
                 field_name="fund_type_name",
             ),
+        )
+
+    @staticmethod
+    def _deduplicate_and_sort_management_fee_results(
+        results: list[TefasManagementFeeResult],
+    ) -> list[TefasManagementFeeResult]:
+        results_by_fund_code: dict[str, TefasManagementFeeResult] = {}
+        for result in results:
+            existing_result = results_by_fund_code.get(result.fund_code)
+            if existing_result is None:
+                results_by_fund_code[result.fund_code] = result
+                continue
+
+            if existing_result != result:
+                raise TefasServiceError(
+                    "Conflicting duplicate TEFAS management-fee row: "
+                    f"fund_code={result.fund_code}"
+                )
+
+        return sorted(
+            results_by_fund_code.values(),
+            key=lambda result: result.fund_code,
+        )
+
+    @staticmethod
+    def _normalize_management_fee_row(
+        *,
+        row: dict[str, Any],
+        fund_kind: str,
+    ) -> TefasManagementFeeResult:
+        return TefasManagementFeeResult(
+            fund_code=TefasService._normalize_required_string(
+                row.get("fonKodu"),
+                field_name="fund_code",
+                uppercase=True,
+            ),
+            management_fee_percentage=TefasService._normalize_management_fee_percentage(
+                row.get("uygulananYu1Y"),
+                field_name="management_fee_percentage",
+            ),
+            fund_kind=fund_kind,
         )
 
     def normalize_portfolio_breakdown_row(
@@ -805,6 +891,41 @@ class TefasService:
             raise TefasServiceError(f"Invalid normalized field: {field_name}")
 
         return normalized_value
+
+    @staticmethod
+    def _normalize_management_fee_percentage(
+        value: Any,
+        *,
+        field_name: str,
+    ) -> Decimal:
+        if isinstance(value, bool) or value is None:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        if not isinstance(value, str):
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        normalized_text = value.strip()
+        if (
+            not normalized_text
+            or not TEFAS_MANAGEMENT_FEE_LOCALE_PATTERN.fullmatch(normalized_text)
+        ):
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        decimal_text = normalized_text.replace(",", ".")
+        if decimal_text.startswith("."):
+            decimal_text = "0" + decimal_text
+        if decimal_text.endswith("."):
+            decimal_text = decimal_text[:-1]
+
+        try:
+            decimal_value = Decimal(decimal_text)
+        except (InvalidOperation, ValueError, TypeError) as exc:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}") from exc
+
+        if not decimal_value.is_finite() or decimal_value < 0:
+            raise TefasServiceError(f"Invalid normalized field: {field_name}")
+
+        return decimal_value
 
     @staticmethod
     def _normalize_allocation_decimal(
