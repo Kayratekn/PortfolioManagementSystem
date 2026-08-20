@@ -49,6 +49,18 @@ class AssetRepository:
         )
         return list(self.db.scalars(statement))
 
+    def list_active_tefas_by_fund_kind(self, *, fund_kind: str) -> list[Asset]:
+        statement = (
+            select(Asset)
+            .where(
+                Asset.data_source == "TEFAS",
+                Asset.is_active.is_(True),
+                Asset.fund_kind == fund_kind,
+            )
+            .order_by(Asset.asset_code.asc())
+        )
+        return list(self.db.scalars(statement))
+
     def list_active_tefas_without_current_fund_type(
         self,
         *,
