@@ -7,7 +7,7 @@
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
 - **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. Official TEFAS fund risk-value extraction is merged. Multi-kind scheduled daily TEFAS synchronization for YAT, EMK, BYF, GYF and GSYF is implemented, verified against TEFAS and PostgreSQL, and merged into main in PR #34.
-- **Status updated:** 2026-08-19
+- **Status updated:** 2026-08-20
 
 ## Product summary
 
@@ -51,7 +51,7 @@ tests/
 | Portfolio domain | Complete | CRUD, ownership isolation, pagination and soft delete are implemented and tested |
 | Asset/data foundation | Implemented | Asset-linked TEFAS snapshots and related repositories/services/tests exist; nullable Asset-level ISIN metadata persistence/enrichment is implemented |
 | Transaction domain | Not started / deferred | Transaction vertical slice has not been the current focus; do not start it before the active TEFAS/data task is closed |
-| TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown and fund-detail page data are used through the backend integration/service layer |
+| TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown, management-fee source extraction for YAT/EMK and fund-detail page data are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
 | TEFAS scheduled daily sync | Complete / merged | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; merged in PR #34 |
 | TEFAS detail snapshot | Implemented | Includes fund category, 1-year category rank, category fund count, raw market-share value and official TEFAS risk value |
@@ -238,8 +238,9 @@ Important verified checkpoints include:
 - The scheduled flow uses fund-kind-level bulk general-info requests rather than one request per fund.
 - Real TEFAS/PostgreSQL smoke test for 2026-08-17 persisted: YAT 2033, EMK 400, BYF 30, GYF 255 and GSYF 539 funds; 3257 TEFAS fund assets were present after the sync.
 - Focused scheduled-sync test suite: **20 passed**.
-- Current full backend test-suite result: **552 passed**.
-- `git diff --check` passed for the current Asset ISIN persistence/enrichment change.
+- Focused PR1 TEFAS management-fee client/service extraction tests: **132 passed**.
+- Current full backend test-suite result: **576 passed**.
+- `git diff --check` passed for the current TEFAS management-fee extraction change.
 - Short-term evolution metrics were implemented and merged in PR #29.
 
 ## Recent Git milestones
@@ -290,7 +291,7 @@ Remaining TEFAS/data gaps to consider when selecting the next task:
 
 - TEFAS ISIN extraction and Asset-level opportunistic persistence/enrichment are implemented. A separate whole-universe ISIN backfill strategy is intentionally not part of the daily bulk sync. Stable extraction paths for platform status, transaction times, commissions and interest-content information remain unresolved.
 - Exact business mapping across the multiple TEFAS classification structures.
-- Verified TEFAS source for management fee.
+- YAT/EMK management-fee source extraction is implemented at client/service level only; database persistence, history, sync integration and BYF/GYF/GSYF management-fee semantics remain intentionally deferred.
 - Official benchmark field vs comparison-series semantics.
 - Exact meaning of `getFplFonList.tarih`.
 - Settlement/value-date source strategy if TEFAS extraction is not stable.

@@ -319,6 +319,33 @@ def test_fetch_fund_profile_detail_posts_expected_payload(monkeypatch: pytest.Mo
         "periyod": "12",
     }
 
+
+def test_fetch_management_fee_info_posts_expected_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _install_fake_client(monkeypatch, [_make_response(200, {"ok": True})])
+    client = CustomTefasClient(
+        base_url="https://example.test",
+        timeout_seconds=5,
+        max_retries=0,
+        retry_wait_seconds=0,
+    )
+
+    result = client.fetch_management_fee_info(fund_kind="EMK")
+
+    assert result == {"ok": True}
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://example.test/api/funds/fonYonetimBazliBilgiGetir"
+    assert calls[0]["json"] == {
+        "dil": "TR",
+        "fonTipi": "EMK",
+        "kurucuKodu": None,
+        "sfonTurKod": None,
+        "fonTurAciklama": None,
+        "islem": None,
+        "fonTurKod": None,
+        "fonGrubu": None,
+    }
+
+
 def _make_text_response(status_code: int, text: str) -> httpx.Response:
     return httpx.Response(
         status_code=status_code,
