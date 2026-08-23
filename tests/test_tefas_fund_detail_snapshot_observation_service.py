@@ -77,6 +77,14 @@ def _metadata(**overrides: object) -> TefasFundDetailPageMetadataResult:
         "category_fund_count": 42,
         "market_share_raw": Decimal("1.2345678901"),
         "risk_value": 3,
+        "tefas_status": "TEFAS'ta Islem Gormektedir",
+        "transaction_start_time": "09:00",
+        "transaction_end_time": "13:30",
+        "entry_commission_raw": Decimal("3"),
+        "exit_commission_raw": Decimal("2.5"),
+        "interest_content": "Faiz icermez",
+        "fund_sale_valor": 0,
+        "fund_redemption_valor": 3,
         "source_page": "fon-detayli-analiz",
     }
     values.update(overrides)
@@ -116,6 +124,14 @@ def test_observe_fund_detail_snapshot_creates_snapshot_for_active_tefas_asset(
     assert snapshot.category_fund_count == 42
     assert snapshot.market_share_raw == Decimal("1.2345678901")
     assert snapshot.risk_value == 3
+    assert snapshot.tefas_status == "TEFAS'ta Islem Gormektedir"
+    assert snapshot.transaction_start_time == "09:00"
+    assert snapshot.transaction_end_time == "13:30"
+    assert snapshot.entry_commission_raw == Decimal("3.0000000000")
+    assert snapshot.exit_commission_raw == Decimal("2.5000000000")
+    assert snapshot.interest_content == "Faiz icermez"
+    assert snapshot.fund_sale_valor == 0
+    assert snapshot.fund_redemption_valor == 3
     assert snapshot.source_page == "fon-detayli-analiz"
     assert snapshot.observed_at == OBSERVED_AT
     assert tefas_service.calls == ["AAL"]
@@ -248,6 +264,14 @@ def test_observe_fund_detail_snapshot_preserves_nullable_source_fields(
                 category_fund_count=None,
                 market_share_raw=None,
                 risk_value=None,
+                tefas_status=None,
+                transaction_start_time=None,
+                transaction_end_time=None,
+                entry_commission_raw=None,
+                exit_commission_raw=None,
+                interest_content=None,
+                fund_sale_valor=None,
+                fund_redemption_valor=None,
             )
         ),
     )
@@ -261,6 +285,14 @@ def test_observe_fund_detail_snapshot_preserves_nullable_source_fields(
     assert snapshot.category_fund_count is None
     assert snapshot.market_share_raw is None
     assert snapshot.risk_value is None
+    assert snapshot.tefas_status is None
+    assert snapshot.transaction_start_time is None
+    assert snapshot.transaction_end_time is None
+    assert snapshot.entry_commission_raw is None
+    assert snapshot.exit_commission_raw is None
+    assert snapshot.interest_content is None
+    assert snapshot.fund_sale_valor is None
+    assert snapshot.fund_redemption_valor is None
 
 
 def test_observe_fund_detail_snapshot_preserves_decimal_exactly(
@@ -279,6 +311,52 @@ def test_observe_fund_detail_snapshot_preserves_decimal_exactly(
     )
 
     assert snapshot.market_share_raw == market_share_raw
+
+
+def test_observe_fund_detail_snapshot_preserves_raw_commission_magnitude(
+    db_session: Session,
+) -> None:
+    _add_asset(db_session)
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=FakeTefasService(_metadata(entry_commission_raw=Decimal("3"))),
+    )
+
+    snapshot = service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    assert snapshot.entry_commission_raw == Decimal("3.0000000000")
+
+
+@pytest.mark.parametrize(
+    ("fund_sale_valor", "fund_redemption_valor"),
+    [(0, 1), (2, 3)],
+)
+def test_observe_fund_detail_snapshot_preserves_valor_values_as_integers(
+    db_session: Session,
+    fund_sale_valor: int,
+    fund_redemption_valor: int,
+) -> None:
+    _add_asset(db_session)
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=FakeTefasService(
+            _metadata(
+                fund_sale_valor=fund_sale_valor,
+                fund_redemption_valor=fund_redemption_valor,
+            )
+        ),
+    )
+
+    snapshot = service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    assert snapshot.fund_sale_valor == fund_sale_valor
+    assert snapshot.fund_redemption_valor == fund_redemption_valor
 
 
 def test_observe_fund_detail_snapshot_is_idempotent_for_identical_same_timestamp_metadata(
@@ -341,6 +419,50 @@ def test_observe_fund_detail_snapshot_rejects_conflicting_same_timestamp_metadat
     tefas_service = FakeTefasService(
         _metadata(),
         _metadata(risk_value=4),
+    )
+    service = TefasFundDetailSnapshotObservationService(
+        db_session,
+        tefas_service=tefas_service,
+    )
+    first_snapshot = service.observe_fund_detail_snapshot(
+        fund_code="AAL",
+        observed_at=OBSERVED_AT,
+    )
+
+    with pytest.raises(
+        TefasFundDetailSnapshotObservationServiceError,
+        match="Conflicting TEFAS fund detail snapshot observation",
+    ):
+        service.observe_fund_detail_snapshot(
+            fund_code="AAL",
+            observed_at=OBSERVED_AT,
+        )
+
+    snapshots = _list_snapshots(db_session)
+    assert [snapshot.id for snapshot in snapshots] == [first_snapshot.id]
+
+
+@pytest.mark.parametrize(
+    "changed_metadata",
+    [
+        {"tefas_status": "Farkli Durum"},
+        {"transaction_start_time": "10:00"},
+        {"transaction_end_time": "14:00"},
+        {"entry_commission_raw": Decimal("4")},
+        {"exit_commission_raw": Decimal("1.5")},
+        {"interest_content": "Faiz icerir"},
+        {"fund_sale_valor": 1},
+        {"fund_redemption_valor": 2},
+    ],
+)
+def test_observe_fund_detail_snapshot_rejects_conflicting_same_timestamp_profile_metadata(
+    db_session: Session,
+    changed_metadata: dict[str, object],
+) -> None:
+    _add_asset(db_session)
+    tefas_service = FakeTefasService(
+        _metadata(),
+        _metadata(**changed_metadata),
     )
     service = TefasFundDetailSnapshotObservationService(
         db_session,

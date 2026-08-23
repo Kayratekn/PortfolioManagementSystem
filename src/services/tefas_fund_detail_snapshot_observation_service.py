@@ -73,6 +73,14 @@ class TefasFundDetailSnapshotObservationService:
                     category_fund_count=metadata.category_fund_count,
                     market_share_raw=metadata.market_share_raw,
                     risk_value=metadata.risk_value,
+                    tefas_status=metadata.tefas_status,
+                    transaction_start_time=metadata.transaction_start_time,
+                    transaction_end_time=metadata.transaction_end_time,
+                    entry_commission_raw=metadata.entry_commission_raw,
+                    exit_commission_raw=metadata.exit_commission_raw,
+                    interest_content=metadata.interest_content,
+                    fund_sale_valor=metadata.fund_sale_valor,
+                    fund_redemption_valor=metadata.fund_redemption_valor,
                     source_page=metadata.source_page,
                 )
                 if isin_changed:
@@ -86,6 +94,14 @@ class TefasFundDetailSnapshotObservationService:
                 category_fund_count=metadata.category_fund_count,
                 market_share_raw=metadata.market_share_raw,
                 risk_value=metadata.risk_value,
+                tefas_status=metadata.tefas_status,
+                transaction_start_time=metadata.transaction_start_time,
+                transaction_end_time=metadata.transaction_end_time,
+                entry_commission_raw=metadata.entry_commission_raw,
+                exit_commission_raw=metadata.exit_commission_raw,
+                interest_content=metadata.interest_content,
+                fund_sale_valor=metadata.fund_sale_valor,
+                fund_redemption_valor=metadata.fund_redemption_valor,
                 source_page=metadata.source_page,
                 observed_at=resolved_observed_at,
             )
@@ -145,6 +161,14 @@ def _validate_existing_snapshot_matches_metadata(
     category_fund_count: int | None,
     market_share_raw: object,
     risk_value: int | None,
+    tefas_status: str | None,
+    transaction_start_time: str | None,
+    transaction_end_time: str | None,
+    entry_commission_raw: object,
+    exit_commission_raw: object,
+    interest_content: str | None,
+    fund_sale_valor: int | None,
+    fund_redemption_valor: int | None,
     source_page: str,
 ) -> None:
     if (
@@ -153,6 +177,14 @@ def _validate_existing_snapshot_matches_metadata(
         and snapshot.category_fund_count == category_fund_count
         and snapshot.market_share_raw == market_share_raw
         and snapshot.risk_value == risk_value
+        and snapshot.tefas_status == tefas_status
+        and snapshot.transaction_start_time == transaction_start_time
+        and snapshot.transaction_end_time == transaction_end_time
+        and snapshot.entry_commission_raw == entry_commission_raw
+        and snapshot.exit_commission_raw == exit_commission_raw
+        and snapshot.interest_content == interest_content
+        and snapshot.fund_sale_valor == fund_sale_valor
+        and snapshot.fund_redemption_valor == fund_redemption_valor
         and snapshot.source_page == source_page
     ):
         return

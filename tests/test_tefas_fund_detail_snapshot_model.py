@@ -59,6 +59,38 @@ def test_tefas_fund_detail_snapshot_columns_types_and_nullability() -> None:
     assert isinstance(columns.risk_value.type, Integer)
     assert columns.risk_value.nullable is True
 
+    assert isinstance(columns.tefas_status.type, String)
+    assert columns.tefas_status.type.length == 255
+    assert columns.tefas_status.nullable is True
+
+    assert isinstance(columns.transaction_start_time.type, String)
+    assert columns.transaction_start_time.type.length == 20
+    assert columns.transaction_start_time.nullable is True
+
+    assert isinstance(columns.transaction_end_time.type, String)
+    assert columns.transaction_end_time.type.length == 20
+    assert columns.transaction_end_time.nullable is True
+
+    assert isinstance(columns.entry_commission_raw.type, Numeric)
+    assert columns.entry_commission_raw.type.precision == 20
+    assert columns.entry_commission_raw.type.scale == 10
+    assert columns.entry_commission_raw.nullable is True
+
+    assert isinstance(columns.exit_commission_raw.type, Numeric)
+    assert columns.exit_commission_raw.type.precision == 20
+    assert columns.exit_commission_raw.type.scale == 10
+    assert columns.exit_commission_raw.nullable is True
+
+    assert isinstance(columns.interest_content.type, String)
+    assert columns.interest_content.type.length == 255
+    assert columns.interest_content.nullable is True
+
+    assert isinstance(columns.fund_sale_valor.type, Integer)
+    assert columns.fund_sale_valor.nullable is True
+
+    assert isinstance(columns.fund_redemption_valor.type, Integer)
+    assert columns.fund_redemption_valor.nullable is True
+
     assert isinstance(columns.source_page.type, String)
     assert columns.source_page.type.length == 100
     assert columns.source_page.nullable is False
@@ -146,6 +178,14 @@ def test_tefas_fund_detail_snapshot_semantics_can_be_represented(db_session: Ses
         category_fund_count=None,
         market_share_raw=Decimal("0.0100000000"),
         risk_value=3,
+        tefas_status="TEFAS'ta Islem Gormektedir",
+        transaction_start_time="09:00",
+        transaction_end_time="13:30",
+        entry_commission_raw=Decimal("3"),
+        exit_commission_raw=Decimal("2.5"),
+        interest_content="Faiz icermez",
+        fund_sale_valor=0,
+        fund_redemption_valor=3,
         observed_at=_observed_at(),
     )
 
@@ -159,6 +199,14 @@ def test_tefas_fund_detail_snapshot_semantics_can_be_represented(db_session: Ses
     assert snapshot.category_fund_count is None
     assert snapshot.market_share_raw == Decimal("0.0100000000")
     assert snapshot.risk_value == 3
+    assert snapshot.tefas_status == "TEFAS'ta Islem Gormektedir"
+    assert snapshot.transaction_start_time == "09:00"
+    assert snapshot.transaction_end_time == "13:30"
+    assert snapshot.entry_commission_raw == Decimal("3.0000000000")
+    assert snapshot.exit_commission_raw == Decimal("2.5000000000")
+    assert snapshot.interest_content == "Faiz icermez"
+    assert snapshot.fund_sale_valor == 0
+    assert snapshot.fund_redemption_valor == 3
     assert snapshot.source_page == "fon-detayli-analiz"
     assert snapshot.observed_at == _observed_at().replace(tzinfo=None)
 
@@ -265,3 +313,23 @@ def test_tefas_fund_detail_snapshot_risk_value_migration_uses_expected_names() -
     assert "batch_op.drop_column" in migration_text
     assert "risk_value" in migration_text
     assert "ck_tefas_fund_detail_snapshots_risk_value_range" in migration_text
+
+
+def test_tefas_fund_detail_snapshot_profile_metadata_migration_uses_expected_names() -> None:
+    migration_text = Path(
+        "alembic/versions/20260823_0011_add_tefas_profile_metadata_to_detail_snapshots.py"
+    ).read_text()
+
+    assert 'revision = "20260823_0011"' in migration_text
+    assert 'down_revision = "20260820_0010"' in migration_text
+    assert 'op.batch_alter_table("tefas_fund_detail_snapshots")' in migration_text
+    assert migration_text.count("batch_op.add_column") == 8
+    assert migration_text.count("batch_op.drop_column") == 8
+    assert "tefas_status" in migration_text
+    assert "transaction_start_time" in migration_text
+    assert "transaction_end_time" in migration_text
+    assert "entry_commission_raw" in migration_text
+    assert "exit_commission_raw" in migration_text
+    assert "interest_content" in migration_text
+    assert "fund_sale_valor" in migration_text
+    assert "fund_redemption_valor" in migration_text
