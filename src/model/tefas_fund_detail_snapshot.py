@@ -43,6 +43,20 @@ class TefasFundDetailSnapshot(TimestampMixin, Base):
     category_fund_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     market_share_raw: Mapped[Decimal | None] = mapped_column(Numeric(20, 10), nullable=True)
     risk_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tefas_status: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    transaction_start_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    transaction_end_time: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    entry_commission_raw: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 10),
+        nullable=True,
+    )
+    exit_commission_raw: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 10),
+        nullable=True,
+    )
+    interest_content: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fund_sale_valor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fund_redemption_valor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_page: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
