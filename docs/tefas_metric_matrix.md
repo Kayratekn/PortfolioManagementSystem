@@ -14,7 +14,7 @@ Availability classifications used in this document:
 
 | Metric | Business purpose | Availability classification | Verified TEFAS source | Required raw fields | Calculation / derivation | Required history window | Confidence | External source needed? | Notes / unresolved issues |
 |---|---|---|---|---|---|---|---|---|---|
-| Latest fund price | Current valuation | `DIRECT_TEFAS` | `fonGnlBlgSiraliGetir`; `fonFiyatBilgiGetir` | `fiyat`, `borsaBultenFiyat`, `tarih` | Direct latest value per endpoint | Latest available day | Medium | No | For `BYF`, `BLH` showed `fonGnlBlgSiraliGetir.fiyat = 49.222014` but `fonFiyatBilgiGetir.fiyat = 49.24`, matching `borsaBultenFiyat`; endpoint-specific price semantics must not be assumed identical. |
+| Latest fund price | Current valuation / price analytics | `DIRECT_TEFAS` | `fonGnlBlgSiraliGetir`; `fonFiyatBilgiGetir` | `fiyat`, `borsaBultenFiyat`, `tarih` | Direct value with endpoint-specific semantics | Latest available day | High | No | For the verified 2026-04-24 BYF cross-section, general-info `fiyat` behaved as calculated per-share fund value / NAV, while `borsaBultenFiyat` was the exchange-market price. `fonFiyatBilgiGetir.fiyat` matched `borsaBultenFiyat` in 30/30 BYF cases. Do not collapse these fields into one semantic meaning. |
 | Daily return | Short-term performance | `DERIVABLE_FROM_TEFAS` | `fonFiyatBilgiGetir`; site label `dailyReturn` | `fiyat`, `tarih` | `(current fiyat / previous available fiyat) - 1` | Previous available trading/data day | Medium | No | Site describes daily return as percentage change in fund prices; treat site label as concept, not confirmed raw field. |
 | 5-day return | Weekly momentum | `DERIVABLE_FROM_TEFAS` | `fonFiyatBilgiGetir` | `fiyat`, `tarih` | Return between current observation and the 5th previous available observation | Approximately 6 price observations | Medium | No | An exact 5-available-day return requires the current observation plus the 5th previous available observation; use available TEFAS observations, not calendar days. |
 | 1-month return | Monthly performance | `DERIVABLE_FROM_TEFAS` | `fonFiyatBilgiGetir`; site label `oneMonthReturn` | `fiyat`, `tarih` | Return between latest and approximately 1 month earlier | About 1 month | Medium | No | Prefer self-calculation until direct endpoint semantics are validated. |
@@ -38,42 +38,68 @@ Availability classifications used in this document:
 | Maximum drawdown | Peak-to-trough downside | `DERIVABLE_FROM_TEFAS` | `fonFiyatBilgiGetir` | `fiyat`, `tarih` | Worst cumulative drop from prior peak | Depends on chosen window; conservatively about 6-12 months or longer | Medium | No | Derived from historical prices, not direct TEFAS output. |
 | Rolling returns | Time-series performance windows | `DERIVABLE_FROM_TEFAS` | `fonFiyatBilgiGetir` | `fiyat`, `tarih` | Repeated return calculation over moving windows | Depends on chosen window | Medium | No | Derived from historical prices. |
 | Momentum | Relative trend signal | `DERIVABLE_FROM_TEFAS` | `fonFiyatBilgiGetir` | `fiyat`, `tarih` | High-level trend score from recent returns or price path | Depends on chosen definition; conservatively about 1-12 months | Low | No | Requires explicit product definition before production use. |
-| Fund category / subtype | Classification and filtering | `DIRECT_TEFAS` | `fonDetayGetir`; `fonUnvanGetir` | `fonTipi`, `fonTurKod`, `fonTurAciklama`, `tanim` | Direct metadata lookup | None | Medium | No | Multiple classification endpoints exist; exact business mapping between them still needs careful modeling. |
+| Fund category / subtype | Classification and filtering | `DIRECT_TEFAS` | Asset fund kind plus `fonProfilDtyGetir` | `Asset.fund_kind`; `fonProfilDtyGetir.fonTuru` | Direct metadata lookup / persisted type history | None | High | No | Production modeling uses `YAT` / `EMK` / `BYF` / `GYF` / `GSYF` as the main fund kind and `fonTuru` as the business-level fund-type classification. `fonTipiGetir` internal codes and `fonDetayGetir` / `fonUnvanGetir` auxiliary vocabularies are not used as a universal business subtype model. |
 | 1-year category ranking | Relative 1-year performance rank within the fund category | `DIRECT_TEFAS` | TEFAS fund detail-analysis page | `kategoriDerece`, `kategoriFonSay` | Direct source values exposed as rank / category fund count | Current detail snapshot | High | No | TEFAS displays these values as its 1-year category ranking. `kategoriDerece` is the displayed rank and `kategoriFonSay` is the displayed category fund count. Zero or null source values must be preserved conservatively rather than interpreted as a valid rank. |
 | Asset allocation | Exposure breakdown | `DIRECT_TEFAS` | `dagilimSiraliGetirT`; TEFAS asset-allocation UI | 54 observed allocation raw fields plus `tarih`; 43 fields have verified raw-to-UI label mappings | Direct allocation percentages for verified mapped fields | Latest available day | High | No | 43 of 54 raw allocation fields have verified same-date raw/UI mappings. The remaining 11 fields (`bb`, `db`, `dot`, `eut`, `fkb`, `kh`, `kks`, `t`, `vm`, `yba`, `ymk`) had no non-zero observation across 12,476 tested raw rows and remain preserved as unobserved/unused raw fields without guessed labels. |
-| Founder / management company | Issuer/manager metadata | `DIRECT_TEFAS` | `getFplFonList` | `kurucuKod`, `kurucuAd` | Direct metadata lookup | None | High | No | Useful for asset master/directory data. |
-| Operator | Operational entity metadata | `DIRECT_TEFAS` | `getFplFonList` | `oprKod`, `oprAd` | Direct metadata lookup | None | High | No | Useful for asset master/directory data. |
-| Fund active/inactive status | Availability and lifecycle tracking | `DIRECT_TEFAS` | `getFplFonList` | `durum` | Direct metadata lookup | None | Medium | No | `durum` is observed; exact allowed values still need enumeration. |
-| Benchmark comparison | Relative performance context | `NEEDS_VALIDATION` | `fonProfilDtyGetir` | `fonKodu`, `fonUnvan`, `fonTuru`, `fonTurGetiri` | Use returned comparison/benchmark series such as `ALTIN`, `BIST100`, `USD` | Depends on endpoint period | Medium | No | Endpoint clearly returns comparison data, but exact row/series semantics need further modeling. |
+| Founder / management company | Issuer/manager metadata | `NEEDS_VALIDATION` | Legacy `getFplFonList` observation only | Legacy `kurucuKod`, `kurucuAd` | Direct if a current source is re-verified | None | Low | Yes, if required | The legacy endpoint is not used as a current production contract. Re-verify a current authoritative source before exposing this metadata. |
+| Operator | Operational entity metadata | `NEEDS_VALIDATION` | Legacy `getFplFonList` observation only | Legacy `oprKod`, `oprAd` | Direct if a current source is re-verified | None | Low | Yes, if required | Do not rely on the legacy endpoint for current production metadata. |
+| Fund active/inactive status | Availability and lifecycle tracking | `NEEDS_VALIDATION` | Legacy `getFplFonList.durum` observation only | Legacy `durum` | Direct if a current source is re-verified | None | Low | Possibly | Current lifecycle-directory semantics require renewed source validation. Keep this separate from the implemented TEFAS platform-status field. |
+| TEFAS performance comparison series | Relative performance context | `DIRECT_TEFAS` | `fonProfilDtyGetir` | `fonKodu`, `fonUnvan`, `fonTuru`, `fonTurGetiri` | Direct comparison-series output | Depends on endpoint period | High | No | Verified to be TEFAS performance-comparison series such as `ALTIN`, `BIST100`, `USD`, `TUFE`, and similar rows. These must not be treated as the fund's legally defined benchmark or threshold value; official benchmark disclosure requires a separately verified source such as KAP if needed. |
 | Net fund flow / estimated money inflow-outflow | Capital movement estimate | `DERIVABLE_FROM_TEFAS` | `fonGnlBlgSiraliGetir` | `portfoyBuyukluk`, `fiyat`, `tarih`; `tedPaySayisi` can be used as a supporting cross-check | `current AUM - previous AUM * (current price / previous price)`, equivalent to removing the estimated valuation-return effect from the AUM change | At least 2 observations | Medium | No | This is an estimated net flow derived from TEFAS daily fund data, not a direct subscription/redemption transaction field. Raw investor cash-flow transactions remain unavailable in the verified TEFAS dataset. |
 
 ## Priority metrics for MVP
 
 Conservative MVP candidates already supportable from verified TEFAS data:
 
-- Latest fund price, with endpoint-specific handling notes for `BYF`.
+- Latest fund price / price analytics with endpoint-specific `BYF` handling:
+  general-info per-share fund value / NAV remains distinct from exchange bulletin
+  price.
 - Investor count.
 - Investor count change and investor count growth %.
 - Fund total value / AUM.
 - AUM change and AUM growth %.
 - Shares outstanding and shares outstanding change.
 - Average fund value per investor.
-- Founder / management company.
-- Operator.
-- Fund active/inactive status.
-- Historical return metrics calculated from `fonFiyatBilgiGetir`, beginning with daily, 5-day, 1-month, 3-month, 6-month, year-to-date, and 1-year return.
+- Historical return metrics calculated from `fonFiyatBilgiGetir`, beginning
+  with daily, 5-day, 1-month, 3-month, 6-month, year-to-date, and 1-year return.
+- Business-level fund classification from `Asset.fund_kind` and
+  `fonProfilDtyGetir.fonTuru`.
+- TEFAS performance-comparison series when comparison context is useful, while
+  keeping them separate from a fund's legally defined benchmark.
+
+Legacy founder/operator/lifecycle-directory metadata is not an MVP dependency
+unless a current authoritative source is separately re-verified.
 
 ## Metrics requiring further validation
 
-Minimum set requiring further validation before production use:
+The remaining TEFAS metric issue that blocks production use of a custom derived
+metric is:
 
-- Benchmark comparison row/series semantics from `fonProfilDtyGetir`.
-- Fund market share denominator grouping and the business mapping of the relevant type.
-- Cross-endpoint price semantics, especially for `BYF`, where `fiyat` did not match across verified observations on `2026-04-24`.
-- Detailed classification mapping across `fonDetayGetir`, `fonUnvanGetir`, and `fonTipiGetir`.
+- Fund market-share denominator grouping and the exact business definition of
+  the relevant TEFAS comparison group.
+
+Additional deferred source requirements are separate from the verified TEFAS
+metric foundation:
+
+- A legally defined official benchmark or threshold value requires a separately
+  verified official source such as KAP if the product later requires it.
+- Current founder / management company, operator, fund lifecycle status, and
+  fund inception date require renewed source validation before use.
 
 ## Summary notes
 
-- Site-observed labels such as `dailyReturn`, `marketShare`, `oneMonthReturn`, and similar keys are useful metric concepts, not automatically confirmed raw API fields.
-- The matrix intentionally favors `DERIVABLE_FROM_TEFAS` over `DIRECT_TEFAS` when a metric can be safely computed from verified TEFAS raw data without relying on unresolved endpoint semantics.
-- No metric in this matrix currently requires a confirmed external source based on the verified TEFAS evidence alone, but some metrics remain unsuitable for production until their TEFAS semantics are validated.
+- Site-observed labels such as `dailyReturn`, `marketShare`, `oneMonthReturn`,
+  and similar keys are useful metric concepts, not automatically confirmed raw
+  API fields.
+- The matrix intentionally favors `DERIVABLE_FROM_TEFAS` over `DIRECT_TEFAS`
+  when a metric can be safely computed from verified TEFAS raw data.
+- BYF endpoint-specific price semantics are resolved for the verified
+  `2026-04-24` cross-section and must remain represented by separate stored
+  fields rather than a collapsed generic price meaning.
+- `fonProfilDtyGetir` comparison rows are verified TEFAS performance-comparison
+  series; they are not a substitute for the fund's legal benchmark.
+- Production fund classification uses the backend fund kind plus
+  `fonProfilDtyGetir.fonTuru`; provider-internal classification codes and
+  auxiliary vocabularies do not need a separate business-domain model.
+- Fund-market-share denominator grouping remains intentionally unresolved and
+  should not be guessed.

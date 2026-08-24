@@ -192,11 +192,24 @@ Observed response:
 }
 ```
 
-Observed note:
+Observed classification behavior:
 
-- `N` appears to be a separate internal classification value.
-- Its meaning has not yet been resolved.
-- This document does not claim that `N` means `BYF`.
+- A bounded live scan of 20 active funds from each TEFAS fund kind produced a
+  consistent `fonTipiGetir` mapping with no errors:
+  - `YAT -> F` (20/20)
+  - `EMK -> M` (20/20)
+  - `BYF -> N` (20/20)
+  - `GYF -> 1` (20/20)
+  - `GSYF -> 0` (20/20)
+- These values are treated as TEFAS provider-internal type codes, not as
+  user-facing business category names.
+- They are not persisted as a separate business classification in the backend.
+- Business-level fund-type history continues to use
+  `fonProfilDtyGetir.fonTuru`.
+- `fonDetayGetir` did not behave as a universal subtype-master endpoint in the
+  tested calls: `EMK` and `BYF` returned structured subtype rows, while `YAT`,
+  `GYF`, and `GSYF` returned no rows. Do not assume identical availability
+  across every fund kind.
 
 ### `POST /api/funds/fonFiyatBilgiGetir`
 
@@ -223,17 +236,39 @@ Observed behavior:
 
 - Returns historical daily price-series data for the selected period.
 
-Important `BYF` observation for `BLH` on `2026-04-24`:
+Verified `BYF` price behavior on `2026-04-24`:
 
-- General-info `fiyat` = `49.222014`
-- General-info `borsaBultenFiyat` = `49.24`
-- `fonFiyatBilgiGetir` `fiyat` = `49.24`
+- The original `BLH` observation showed:
+  - General-info `fiyat` = `49.222014`
+  - General-info `borsaBultenFiyat` = `49.24`
+  - `fonFiyatBilgiGetir` `fiyat` = `49.24`
+- The same-date cross-section was then checked across all 30 available `BYF`
+  rows:
+  - `fonFiyatBilgiGetir.fiyat` matched `borsaBultenFiyat` in 30/30 cases.
+  - It differed from general-info `fiyat` in 30/30 cases.
+  - No tested row was missing `borsaBultenFiyat`.
+- A separate arithmetic check across those same 30 `BYF` rows found that
+  general-info `fiyat` matched `portfoyBuyukluk / tedPaySayisi` in 30/30
+  cases within the chosen numeric tolerance.
+- This is consistent with the official BYF pricing model in which calculated
+  per-share fund value / NAV and exchange-market transaction price are distinct
+  values.
 
-Therefore, a field named `fiyat` must not be assumed to have identical
-semantics across every TEFAS endpoint, especially for `BYF`.
+Production interpretation:
 
-This document does not assign a confirmed meaning to `kategoriDerece` or
-`kategoriFonSay`.
+- For observed `BYF` behavior, general-info `fiyat` is treated as the calculated
+  per-share fund value / NAV.
+- `borsaBultenFiyat` is treated as the exchange-market / bulletin price.
+- `fonFiyatBilgiGetir.fiyat` matched the exchange bulletin price in the verified
+  `2026-04-24` cross-section.
+- Endpoint-specific price fields must therefore remain separate; a generic
+  `fiyat` field name must not be assumed to carry identical semantics across
+  TEFAS endpoints.
+
+`kategoriDerece` and `kategoriFonSay` are treated as the TEFAS-displayed
+one-year category rank and category fund count respectively. Null or zero source
+values must still be preserved conservatively rather than interpreted as valid
+ranks.
 
 ### `POST /api/funds/fonProfilDtyGetir`
 
@@ -356,16 +391,22 @@ Observed TEFAS descriptions:
 
 ## Unresolved meanings
 
-The following items remain unresolved and should not be treated as confirmed
-production semantics yet:
+The following items remain unresolved or intentionally deferred and should not
+receive guessed production semantics:
 
-- Abbreviated portfolio-breakdown fields such as `bb`, `bpp`, `gsykb`, `vdm`,
-  and similar short keys.
-- The meaning of `fonTipi = N` returned by `fonTipiGetir`.
-- The exact semantics of `kategoriDerece` and `kategoriFonSay`.
-- Whether fields with the same name across endpoints, especially `fiyat`, carry
-  identical business meaning.
-- The exact meaning of the `tarih` field returned by `getFplFonList`.
+- The 11 portfolio-breakdown raw fields `bb`, `db`, `dot`, `eut`, `fkb`, `kh`,
+  `kks`, `t`, `vm`, `yba`, and `ymk`. They remained null/zero across the
+  existing broad raw-data scan and therefore keep their raw names without
+  guessed business labels.
+- The exact business meaning of the legacy `getFplFonList.tarih` field remains
+  unresolved. The legacy endpoint is not used as a current production source,
+  and this field must not be interpreted as fund inception/start date.
+- TEFAS internal classification codes such as `F`, `M`, `N`, `1`, and `0` are
+  verified as stable observed fund-kind mappings in the bounded scan, but their
+  provider-internal naming semantics are not needed for the business domain.
+- Fund-market-share denominator grouping still requires an explicit definition
+  of the relevant TEFAS grouping before a custom derived production metric is
+  used.
 
 ## Production-use and access considerations
 
@@ -385,17 +426,24 @@ not proof that these discovered endpoints should be implemented in production.
 
 Discovery is not complete yet.
 
-The current document records verified raw endpoint observations, site metric
-labels/descriptions, unresolved meanings, and operational/access notes. It does
-not recommend production implementation of the newly observed endpoints yet.
+The current document records verified raw endpoint observations, validated
+business semantics, intentionally deferred gaps, and operational/access notes.
+Production use must follow the conservative backend decisions documented here
+and in `PROJECT_STATUS.md`; an observed TEFAS endpoint is not automatically a
+stable production contract.
 
-## Next discovery step
+## Future discovery only if required
 
-Remaining discovery work:
+The TEFAS backend MVP discovery phase is complete. Remaining discovery is
+intentionally deferred unless a concrete product requirement makes it necessary:
 
-- Inspect additional TEFAS endpoints and related site resources.
-- Resolve abbreviated portfolio-breakdown field meanings from verified
-  evidence.
-- Determine the business meaning of `fonTipi = N`.
-- Compare similarly named fields across endpoints before assuming semantic
-  equivalence.
+- Do not assign guessed meanings to the 11 portfolio-breakdown fields that
+  remained unobserved/null-zero in the existing broad scan.
+- Do not create a separate business-domain model for provider-internal
+  `fonTipiGetir` codes; the observed `YAT -> F`, `EMK -> M`, `BYF -> N`,
+  `GYF -> 1`, and `GSYF -> 0` mapping is sufficient for current provider-level
+  understanding.
+- Re-verify current authoritative sources for legacy directory metadata or fund
+  inception date if those fields become product requirements.
+- Continue preserving endpoint-specific semantics for similarly named TEFAS
+  fields rather than assuming equivalence from field names alone.

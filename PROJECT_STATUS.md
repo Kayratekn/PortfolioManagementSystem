@@ -6,8 +6,8 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication and Portfolio CRUD are stable. TEFAS market-data integration, fund-detail snapshots, portfolio-allocation mapping and short-term evolution metrics are implemented and documented. Official TEFAS fund risk-value extraction is merged. Multi-kind scheduled daily TEFAS synchronization for YAT, EMK, BYF, GYF and GSYF is implemented, verified against TEFAS and PostgreSQL, and merged into main in PR #34. YAT/EMK management-fee source extraction, history persistence and bulk refresh/history sync are implemented; scheduler/CLI/API integration remains deferred. TEFAS detail-page profile metadata persistence into fund-detail snapshots is implemented.
-- **Status updated:** 2026-08-23
+- **Current backend stage:** Authentication and Portfolio CRUD are stable. The TEFAS backend MVP data foundation is complete: multi-kind daily synchronization, historical/raw fund data support, detail snapshots, official risk value, ISIN enrichment, fund-type history, portfolio-allocation mapping, short-term evolution metrics, YAT/EMK management-fee history, and detail-page profile metadata persistence are implemented. Final discovery resolved the MVP handling of TEFAS classification structures, BYF NAV-versus-market price semantics, comparison-series versus official-benchmark semantics, settlement/value-date fields, and the legacy `getFplFonList.tarih` ambiguity. Remaining TEFAS items are intentionally deferred and do not block the next backend vertical slice.
+- **Status updated:** 2026-08-24
 
 ## Product summary
 
@@ -285,30 +285,32 @@ Final high-level classification:
 
 ## Immediate next backend steps
 
-Work in small controlled increments. The multi-kind scheduled daily TEFAS sync is complete and merged.
+Work in small controlled increments. The TEFAS backend MVP data foundation is complete; remaining provider-specific items are deferred unless a concrete product requirement makes them necessary.
 
-1. **Select the next backend/data-contract task**
+1. **Start the Transaction domain**
+   - Perform source/code discovery before implementation.
+   - Define the smallest correct Transaction vertical slice.
+   - Keep transactions as the source of truth for ownership.
+   - Start with `BUY` and `SELL`, use `Decimal` / database `NUMERIC`, and reject sells that exceed available quantity.
+
+2. **Preserve the completed TEFAS foundation**
    - Keep the verified daily `YAT`, `EMK`, `BYF`, `GYF` and `GSYF` bulk sync stable.
-   - The data team is handling the five-year historical bulk dataset; do not duplicate that collection work in this backend slice.
-   - Review the remaining TEFAS/data-contract gaps and choose the highest-value unresolved backend task.
-
-2. **Before the next implementation**
-   - Perform source/code discovery first.
-   - Define the smallest correct implementation slice.
-   - Run focused tests and the full suite before PR.
-   - Do not jump directly into Transaction development without an explicit priority decision.
+   - The data team is handling the five-year historical bulk dataset; do not duplicate that collection work.
+   - Run focused tests and the full suite before each PR.
 
 ## Current open decisions / remaining data gaps
 
-Remaining TEFAS/data gaps to consider when selecting the next task:
+The following TEFAS items are intentionally deferred and do not block the Transaction domain:
 
-- TEFAS ISIN extraction and Asset-level opportunistic persistence/enrichment are implemented. A separate whole-universe ISIN backfill strategy is intentionally not part of the daily bulk sync. Detail-page `profilData` extraction and `TefasFundDetailSnapshot` persistence for platform status, transaction times, raw commissions, interest content and raw valor fields are implemented; business interpretation remains intentionally deferred.
-- Exact business mapping across the multiple TEFAS classification structures.
-- YAT/EMK management-fee source extraction, history persistence and bulk refresh/history sync are implemented; scheduler/daily-sync/CLI/API integration and BYF/GYF/GSYF management-fee semantics remain intentionally deferred.
-- Official benchmark field vs comparison-series semantics.
-- Exact meaning of `getFplFonList.tarih`.
-- Raw `fonSatisValor` / `fonGeriAlisValor` extraction from detail-page `profilData` is implemented; exact business semantics and user-facing settlement/value-date mapping remain unresolved.
-- Cross-endpoint authoritative price semantics for BYF and any other affected fund types.
+- The 11 portfolio-allocation raw fields (`bb`, `db`, `dot`, `eut`, `fkb`, `kh`, `kks`, `t`, `vm`, `yba`, `ymk`) remain unresolved/unobserved after the existing broad raw-data scan and must not receive guessed labels.
+- `girisKomisyonu` extraction and persistence exist, but no non-null live example has been found, so its exact source semantics remain unverified. `cikisKomisyonu` has a verified non-null example and is preserved as the raw TEFAS percentage-point value.
+- YAT/EMK management-fee extraction, history persistence and bulk refresh/history sync are implemented. Scheduler/daily-sync/CLI/API integration and BYF/GYF/GSYF management-fee semantics remain deferred.
+- `fonProfilDtyGetir` comparison rows are TEFAS performance-comparison series, not the fund's legal benchmark. If an official benchmark or threshold value becomes an MVP requirement, use a separately verified official source such as KAP.
+- The old `getFplFonList.tarih` field remains semantically unresolved and must not be treated as fund inception date. The legacy endpoint is not used as a current production source.
+- Fund inception/start date and current founder/operator/lifecycle directory metadata require a separately verified current source if they become product requirements.
+- Fund-market-share denominator grouping remains unsuitable for a custom derived production metric until the relevant TEFAS grouping semantics are explicitly defined.
+- For BYF, observed evidence distinguishes general-info `fiyat` as calculated per-share fund value / NAV from `borsaBultenFiyat` as the exchange-market price; historical `fonFiyatBilgiGetir.fiyat` matched the bulletin price across the verified 2026-04-24 BYF cross-section. Preserve endpoint-specific semantics rather than collapsing the fields.
+- TEFAS internal type codes observed through `fonTipiGetir` (`YAT -> F`, `EMK -> M`, `BYF -> N`, `GYF -> 1`, `GSYF -> 0`) are provider-internal metadata and are not persisted as user-facing business classifications. Business-level fund-type history continues to use `fonProfilDtyGetir.fonTuru`.
 
 ## Local development commands
 
