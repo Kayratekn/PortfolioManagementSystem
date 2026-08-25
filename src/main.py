@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
 from src.config.settings import get_settings
 from src.controller.auth_controller import router as auth_router
 from src.controller.health_controller import router as health_router
+from src.controller.holding_controller import router as holding_router
 from src.controller.portfolio_controller import router as portfolio_router
 from src.controller.transaction_controller import router as transaction_router
 from src.controller.tefas_fund_controller import router as tefas_fund_router
@@ -24,4 +25,5 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(portfolio_router)
 app.include_router(transaction_router)
+app.include_router(holding_router)
 app.include_router(tefas_fund_router)

@@ -69,7 +69,12 @@ def _create_portfolio(db_session: Session, *, user_id: int, name: str) -> Portfo
     return portfolio
 
 
-def _create_asset(db_session: Session, *, asset_code: str) -> Asset:
+def _create_asset(
+    db_session: Session,
+    *,
+    asset_code: str,
+    is_active: bool = True,
+) -> Asset:
     asset = Asset(
         asset_code=asset_code,
         asset_name=f"{asset_code} Example Fund",
@@ -77,7 +82,7 @@ def _create_asset(db_session: Session, *, asset_code: str) -> Asset:
         fund_kind="YAT",
         currency="TRY",
         data_source="TEFAS",
-        is_active=True,
+        is_active=is_active,
     )
     db_session.add(asset)
     db_session.flush()
@@ -395,3 +400,213 @@ def test_list_by_portfolio_and_asset_orders_same_date_by_id_ascending(
 
     assert first.id < second.id
     assert result == [first, second]
+
+def test_list_holdings_by_portfolio_returns_empty_list_when_no_transactions(
+    db_session: Session,
+) -> None:
+    portfolio, _asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == []
+
+
+def test_list_holdings_by_portfolio_returns_buy_only_asset_quantity(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("3.25000000"),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == [(asset, Decimal("3.25000000"))]
+
+
+def test_list_holdings_by_portfolio_returns_buy_minus_sell_net_quantity(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="BUY",
+            quantity=Decimal("10.00000000"),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="SELL",
+            quantity=Decimal("4.12500000"),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == [(asset, Decimal("5.87500000"))]
+
+
+def test_list_holdings_by_portfolio_aggregates_multiple_assets_independently(
+    db_session: Session,
+) -> None:
+    portfolio, first_asset = _create_transaction_parents(db_session)
+    second_asset = _create_asset(db_session, asset_code="BBL")
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=first_asset.id,
+            quantity=Decimal("5.00000000"),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=second_asset.id,
+            quantity=Decimal("7.50000000"),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=second_asset.id,
+            transaction_type="SELL",
+            quantity=Decimal("2.00000000"),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == [
+        (first_asset, Decimal("5.00000000")),
+        (second_asset, Decimal("5.50000000")),
+    ]
+
+
+def test_list_holdings_by_portfolio_omits_fully_sold_assets(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="BUY",
+            quantity=Decimal("5.00000000"),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="SELL",
+            quantity=Decimal("5.00000000"),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == []
+
+
+def test_list_holdings_by_portfolio_ignores_other_portfolio_transactions(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    other_user = _create_user(
+        db_session,
+        email="holdings-other-portfolio@example.com",
+        username="holdings-other-portfolio",
+    )
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=other_user.id,
+        name="Holdings Other Portfolio",
+    )
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("5.00000000"),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=other_portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("9.00000000"),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == [(asset, Decimal("5.00000000"))]
+
+
+def test_list_holdings_by_portfolio_includes_inactive_assets_with_positive_quantity(
+    db_session: Session,
+) -> None:
+    user = _create_user(
+        db_session,
+        email="inactive-holding@example.com",
+        username="inactive-holding",
+    )
+    portfolio = _create_portfolio(
+        db_session,
+        user_id=user.id,
+        name="Inactive Holding Portfolio",
+    )
+    asset = _create_asset(db_session, asset_code="INA", is_active=False)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("2.00000000"),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == [(asset, Decimal("2.00000000"))]
+
+
+def test_list_holdings_by_portfolio_orders_by_asset_id(db_session: Session) -> None:
+    portfolio, first_asset = _create_transaction_parents(db_session)
+    second_asset = _create_asset(db_session, asset_code="BBL")
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=second_asset.id,
+            quantity=Decimal("2.00000000"),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=first_asset.id,
+            quantity=Decimal("1.00000000"),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio(portfolio_id=portfolio.id)
+
+    assert first_asset.id < second_asset.id
+    assert result == [
+        (first_asset, Decimal("1.00000000")),
+        (second_asset, Decimal("2.00000000")),
+    ]
