@@ -11,6 +11,9 @@ class AssetRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def get_by_id(self, asset_id: int) -> Asset | None:
+        return self.db.get(Asset, asset_id)
+
     def get_by_source_and_code(
         self,
         *,

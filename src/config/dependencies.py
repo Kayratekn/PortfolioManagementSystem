@@ -13,11 +13,13 @@ from src.repositories.asset_repository import AssetRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
+from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
 from src.services.portfolio_service import PortfolioService
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.token_service import TokenService
+from src.services.transaction_service import TransactionService
 from src.services.user_service import UserService
 
 
@@ -38,6 +40,10 @@ def get_portfolio_repository(db: Annotated[Session, Depends(get_db)]) -> Portfol
 
 def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetRepository:
     return AssetRepository(db)
+
+
+def get_transaction_repository(db: Annotated[Session, Depends(get_db)]) -> TransactionRepository:
+    return TransactionRepository(db)
 
 
 def get_tefas_fund_allocation_data_repository(
@@ -71,6 +77,23 @@ def get_portfolio_service(
     portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
 ) -> PortfolioService:
     return PortfolioService(portfolio_repository)
+
+
+def get_transaction_service(
+    db: Annotated[Session, Depends(get_db)],
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
+    transaction_repository: Annotated[
+        TransactionRepository,
+        Depends(get_transaction_repository),
+    ],
+) -> TransactionService:
+    return TransactionService(
+        db=db,
+        portfolio_repository=portfolio_repository,
+        asset_repository=asset_repository,
+        transaction_repository=transaction_repository,
+    )
 
 
 def get_tefas_fund_allocation_read_service(
