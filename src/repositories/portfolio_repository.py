@@ -41,6 +41,22 @@ class PortfolioRepository:
         )
         return self.db.scalar(statement)
 
+    def get_by_id_for_user_for_update(
+        self,
+        portfolio_id: int,
+        user_id: int,
+    ) -> Portfolio | None:
+        statement = (
+            select(Portfolio)
+            .where(
+                Portfolio.id == portfolio_id,
+                Portfolio.user_id == user_id,
+                Portfolio.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        return self.db.scalar(statement)
+
     def update(self, portfolio: Portfolio) -> Portfolio:
         self.db.add(portfolio)
         self.db.commit()

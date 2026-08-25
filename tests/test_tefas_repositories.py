@@ -66,6 +66,23 @@ def test_asset_repository_add_assigns_id_after_flush(db_session: Session) -> Non
     assert asset.id is not None
 
 
+def test_asset_repository_get_by_id_returns_existing_asset(db_session: Session) -> None:
+    repository = AssetRepository(db_session)
+    asset = _build_asset()
+    repository.add(asset)
+
+    result = repository.get_by_id(asset.id)
+
+    assert result is asset
+
+
+def test_asset_repository_get_by_id_returns_none_when_missing(db_session: Session) -> None:
+    repository = AssetRepository(db_session)
+
+    result = repository.get_by_id(1)
+
+    assert result is None
+
 
 def test_asset_repository_get_by_source_and_code_returns_matching_asset(db_session: Session) -> None:
     repository = AssetRepository(db_session)

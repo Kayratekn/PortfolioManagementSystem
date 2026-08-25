@@ -7,6 +7,7 @@ from . import (
     tefas_fund_detail_snapshot,
     tefas_fund_type_history,
     tefas_management_fee_history,
+    transaction,
     user,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "tefas_fund_detail_snapshot",
     "tefas_fund_type_history",
     "tefas_management_fee_history",
+    "transaction",
     "user",
 ]

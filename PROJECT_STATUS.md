@@ -6,8 +6,8 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication and Portfolio CRUD are stable. The TEFAS backend MVP data foundation is complete: multi-kind daily synchronization, historical/raw fund data support, detail snapshots, official risk value, ISIN enrichment, fund-type history, portfolio-allocation mapping, short-term evolution metrics, YAT/EMK management-fee history, and detail-page profile metadata persistence are implemented. Final discovery resolved the MVP handling of TEFAS classification structures, BYF NAV-versus-market price semantics, comparison-series versus official-benchmark semantics, settlement/value-date fields, and the legacy `getFplFonList.tarih` ambiguity. Remaining TEFAS items are intentionally deferred and do not block the next backend vertical slice.
-- **Status updated:** 2026-08-24
+- **Current backend stage:** Authentication and Portfolio CRUD are stable. The TEFAS backend MVP data foundation remains complete. The first Transaction vertical slice / Transaction foundation is now implemented and validated: BUY and SELL creation are supported, and Transactions remain the source of truth for ownership/quantity. Remaining TEFAS items are intentionally deferred and do not block the next backend slice.
+- **Status updated:** 2026-08-25
 
 ## Product summary
 
@@ -50,7 +50,7 @@ tests/
 | User/authentication domain | Complete | Register, login, current-user flow, password hashing and JWT validation are implemented |
 | Portfolio domain | Complete | CRUD, ownership isolation, pagination and soft delete are implemented and tested |
 | Asset/data foundation | Implemented | Asset-linked TEFAS snapshots and related repositories/services/tests exist; nullable Asset-level ISIN metadata persistence/enrichment is implemented |
-| Transaction domain | Not started / deferred | Transaction vertical slice has not been the current focus; do not start it before the active TEFAS/data task is closed |
+| Transaction domain | Implemented / validated (foundation) | PostgreSQL `transactions` table via migration `20260825_0012`; BUY/SELL create flow uses Decimal / NUMERIC precision, portfolio ownership isolation, asset existence validation, SELL quantity rejection including backdated cumulative-balance checks, and PostgreSQL `FOR UPDATE` protection for concurrent SELL validation per portfolio. Holdings, valuation, cost basis, realized P/L, transaction listing/history API and frontend integration are not complete. |
 | TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown, management-fee source extraction/history persistence and bulk refresh/history sync for YAT/EMK and fund-detail page/profile metadata are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
 | TEFAS scheduled daily sync | Complete / merged | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; merged in PR #34 |
@@ -255,6 +255,12 @@ Important verified checkpoints include:
 - Current full backend test-suite result: **675 passed**.
 - `git diff --check` passed for the current TEFAS detail-page profile metadata persistence change.
 - Short-term evolution metrics were implemented and merged in PR #29.
+- Transaction migration `20260825_0012` was applied on real PostgreSQL.
+- Transaction migration round-trip `0012 -> 0011 -> 0012` passed.
+- Focused Transaction-related suite: **76 passed**.
+- Current full backend test-suite result after Transaction foundation: **731 passed**.
+- Real PostgreSQL BUY 10 / SELL 4 smoke produced net quantity `6.00000000`.
+- Real PostgreSQL `FOR UPDATE` smoke verified a second session was blocked while the first held the portfolio lock.
 
 ## Recent Git milestones
 
@@ -287,11 +293,11 @@ Final high-level classification:
 
 Work in small controlled increments. The TEFAS backend MVP data foundation is complete; remaining provider-specific items are deferred unless a concrete product requirement makes them necessary.
 
-1. **Start the Transaction domain**
-   - Perform source/code discovery before implementation.
-   - Define the smallest correct Transaction vertical slice.
-   - Keep transactions as the source of truth for ownership.
-   - Start with `BUY` and `SELL`, use `Decimal` / database `NUMERIC`, and reject sells that exceed available quantity.
+1. **Start Holdings / Positions foundation**
+   - Derive current quantities from Transaction history.
+   - Transactions remain the source of truth.
+   - Do not introduce duplicated persisted holding truth without a concrete need.
+   - Before portfolio valuation, evaluate the required asset-price and exchange-rate foundation for multi-currency portfolios.
 
 2. **Preserve the completed TEFAS foundation**
    - Keep the verified daily `YAT`, `EMK`, `BYF`, `GYF` and `GSYF` bulk sync stable.
@@ -300,7 +306,7 @@ Work in small controlled increments. The TEFAS backend MVP data foundation is co
 
 ## Current open decisions / remaining data gaps
 
-The following TEFAS items are intentionally deferred and do not block the Transaction domain:
+The following TEFAS items are intentionally deferred and do not block the next backend work / Holdings-Positions foundation:
 
 - The 11 portfolio-allocation raw fields (`bb`, `db`, `dot`, `eut`, `fkb`, `kh`, `kks`, `t`, `vm`, `yba`, `ymk`) remain unresolved/unobserved after the existing broad raw-data scan and must not receive guessed labels.
 - `girisKomisyonu` extraction and persistence exist, but no non-null live example has been found, so its exact source semantics remain unverified. `cikisKomisyonu` has a verified non-null example and is preserved as the raw TEFAS percentage-point value.
