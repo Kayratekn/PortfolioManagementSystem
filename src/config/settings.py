@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     tefas_timeout_seconds: float = Field(default=30.0, gt=0)
     tefas_max_retries: int = Field(default=3, ge=0)
     tefas_retry_wait_seconds: float = Field(default=10.0, ge=0)
+    tcmb_base_url: str = Field(default="https://www.tcmb.gov.tr")
+    tcmb_timeout_seconds: float = Field(default=30.0, gt=0)
+    tcmb_max_retries: int = Field(default=3, ge=0)
+    tcmb_retry_wait_seconds: float = Field(default=10.0, ge=0)
 
 
 @lru_cache

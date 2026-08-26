@@ -1,5 +1,6 @@
 from . import (
     asset,
+    exchange_rate,
     portfolio,
     tefas_fetch_log,
     tefas_fund_allocation_data,
@@ -13,6 +14,7 @@ from . import (
 
 __all__ = [
     "asset",
+    "exchange_rate",
     "portfolio",
     "tefas_fetch_log",
     "tefas_fund_allocation_data",
