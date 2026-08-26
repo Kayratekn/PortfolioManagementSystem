@@ -173,6 +173,18 @@ holding quantity = sum(BUY quantity) - sum(SELL quantity)
   for chart comparison.
 - A portfolio snapshot represents a dated calculated result, not a replacement
   for transaction history.
+- For TEFAS valuation, `YAT`, `EMK`, `GYF` and `GSYF` use
+  `TefasFundDailyData.price`; `BYF` uses `exchange_bulletin_price`.
+  If a BYF exchange-market price is unavailable, do not silently fall back to NAV.
+- For valuation FX, use the Decimal TCMB reference midpoint
+  `(ForexBuying + ForexSelling) / 2`; do not persist the midpoint.
+- Use latest-on-or-before semantics independently for valuation price and FX data.
+  Price date and FX date do not need to match across independent providers.
+- Direct and inverse FX conversions use the stored foreign/TRY observation.
+  Foreign-to-foreign conversions go through TRY and require both TCMB legs to
+  have the same effective `rate_date`; otherwise the conversion is unavailable.
+- If `Asset.currency` is unknown, do not infer or hardcode a currency.
+  FX-dependent valuation must remain unavailable until a reliable currency is known.
 
 ### Data collection
 
