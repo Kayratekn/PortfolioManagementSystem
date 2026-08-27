@@ -610,3 +610,178 @@ def test_list_holdings_by_portfolio_orders_by_asset_id(db_session: Session) -> N
         (first_asset, Decimal("1.00000000")),
         (second_asset, Decimal("2.00000000")),
     ]
+
+
+def test_list_holdings_by_portfolio_on_or_before_excludes_future_buy(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("5.00000000"),
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("7.00000000"),
+            transaction_date=date(2026, 8, 27),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio_on_or_before(
+        portfolio_id=portfolio.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == [(asset, Decimal("5.00000000"))]
+
+
+def test_list_holdings_by_portfolio_on_or_before_excludes_future_sell(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="BUY",
+            quantity=Decimal("10.00000000"),
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="SELL",
+            quantity=Decimal("4.00000000"),
+            transaction_date=date(2026, 8, 27),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio_on_or_before(
+        portfolio_id=portfolio.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == [(asset, Decimal("10.00000000"))]
+
+
+def test_list_holdings_by_portfolio_on_or_before_includes_exact_as_of_date(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="BUY",
+            quantity=Decimal("5.00000000"),
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="BUY",
+            quantity=Decimal("2.00000000"),
+            transaction_date=date(2026, 8, 26),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="SELL",
+            quantity=Decimal("1.00000000"),
+            transaction_date=date(2026, 8, 26),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio_on_or_before(
+        portfolio_id=portfolio.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == [(asset, Decimal("6.00000000"))]
+
+
+def test_list_holdings_by_portfolio_on_or_before_omits_fully_sold_asset(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="BUY",
+            quantity=Decimal("5.00000000"),
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="SELL",
+            quantity=Decimal("5.00000000"),
+            transaction_date=date(2026, 8, 26),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio_on_or_before(
+        portfolio_id=portfolio.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == []
+
+
+def test_list_holdings_by_portfolio_on_or_before_ignores_other_portfolio_transactions(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    other_user = _create_user(
+        db_session,
+        email="as-of-other-portfolio@example.com",
+        username="as-of-other-portfolio",
+    )
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=other_user.id,
+        name="As Of Other Portfolio",
+    )
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("5.00000000"),
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=other_portfolio.id,
+            asset_id=asset.id,
+            quantity=Decimal("9.00000000"),
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+
+    result = repository.list_holdings_by_portfolio_on_or_before(
+        portfolio_id=portfolio.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == [(asset, Decimal("5.00000000"))]

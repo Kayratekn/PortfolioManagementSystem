@@ -6,8 +6,8 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication, Portfolio CRUD, Transaction and Holdings foundations are stable. The TEFAS data foundation and TCMB ExchangeRate foundation are implemented and validated. Valuation market-data foundation v1 is now implemented: TEFAS valuation price selection preserves BYF exchange-market-versus-NAV semantics, and FX conversion supports TRY/USD/EUR/GBP using TCMB midpoint reference rates. Portfolio-level valuation aggregation, portfolio weights, cost basis and P/L are not yet complete.
-- **Status updated:** 2026-08-26
+- **Current backend stage:** Authentication, Portfolio CRUD, Transaction and Holdings foundations are stable. TEFAS valuation-price and TCMB FX foundations are implemented and validated. Portfolio Valuation Aggregation v1 is now implemented and validated at service level: it derives holdings as-of `valuation_date` from Transaction history, combines holding quantity with TEFAS valuation price and FX conversion, preserves price/FX provenance, marks missing price/currency/FX as explicit `INCOMPLETE` valuation, and never presents a partial portfolio total as complete. Portfolio valuation API exposure, weights, cost basis and P/L remain incomplete.
+- **Status updated:** 2026-08-27
 
 ## Product summary
 
@@ -50,10 +50,11 @@ tests/
 | User/authentication domain | Complete | Register, login, current-user flow, password hashing and JWT validation are implemented |
 | Portfolio domain | Complete | CRUD, ownership isolation, pagination and soft delete are implemented and tested |
 | Asset/data foundation | Implemented | Asset-linked TEFAS snapshots and related repositories/services/tests exist; nullable Asset-level ISIN metadata persistence/enrichment is implemented |
-| Transaction domain | Implemented / validated (foundation) | PostgreSQL `transactions` table via migration `20260825_0012`; BUY/SELL create flow uses Decimal / NUMERIC precision, portfolio ownership isolation, asset existence validation, SELL quantity rejection including backdated cumulative-balance checks, and PostgreSQL `FOR UPDATE` protection for concurrent SELL validation per portfolio. Valuation, cost basis, realized P/L, transaction listing/history API and frontend integration are not complete. |
-| Holdings domain | Implemented / validated (foundation) | Holdings are derived from Transaction history without duplicated persisted holdings truth. `GET /api/v1/portfolios/{portfolio_id}/holdings` returns asset metadata and Decimal quantity for positive current holdings only; fully sold assets are omitted and ownership isolation is enforced. Valuation market-data selection/conversion foundation now exists, but portfolio-level market value, portfolio weight, cost basis and P/L are not complete. |
+| Transaction domain | Implemented / validated (foundation) | PostgreSQL `transactions` table via migration `20260825_0012`; BUY/SELL create flow uses Decimal / NUMERIC precision, portfolio ownership isolation, asset existence validation, SELL quantity rejection including backdated cumulative-balance checks, and PostgreSQL `FOR UPDATE` protection for concurrent SELL validation per portfolio. Cost basis, realized P/L, transaction listing/history API and frontend integration are not complete. |
+| Holdings domain | Implemented / validated (foundation) | Holdings are derived from Transaction history without duplicated persisted holdings truth. `GET /api/v1/portfolios/{portfolio_id}/holdings` returns asset metadata and Decimal quantity for positive current holdings only; fully sold assets are omitted and ownership isolation is enforced. Service-level valuation aggregation now exists; portfolio weight, cost basis and P/L remain incomplete. |
 | Exchange-rate / TCMB foundation | Implemented / validated | PostgreSQL `exchange_rates` via migration `20260826_0013`; TCMB current/historical XML client preserves effective rate date and Decimal `ForexBuying`/`ForexSelling`; idempotent TCMB sync persists USD/TRY, EUR/TRY and GBP/TRY observations. |
 | Valuation market-data foundation | Implemented / validated (v1) | YAT/EMK/GYF/GSYF valuation uses TEFAS NAV `price`; BYF uses `exchange_bulletin_price` as exchange-market price with no silent NAV fallback. Price and FX lookups use latest-on-or-before semantics. FX conversion uses Decimal TCMB midpoint reference rates for identity/direct/inverse/cross conversions; foreign-to-foreign cross legs require the same effective date. |
+| Portfolio valuation aggregation | Implemented / validated (v1 service) | As-of holdings are derived from transactions using `transaction_date <= valuation_date` for positive holdings only, then composed with the TEFAS price selector and FX conversion using Decimal arithmetic. Results expose `COMPLETE` / `INCOMPLETE` status, preserve price and FX provenance, and keep `total_market_value` as `None` when any positive holding is unavailable. No API endpoint exists yet. |
 | TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown, management-fee source extraction/history persistence and bulk refresh/history sync for YAT/EMK and fund-detail page/profile metadata are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
 | TEFAS scheduled daily sync | Complete / merged | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; merged in PR #34 |
@@ -271,6 +272,10 @@ Important verified checkpoints include:
 - Focused Holdings integration slice: **35 passed**.
 - Real PostgreSQL BUY 10 / SELL 4 holdings smoke produced quantity `6.00000000`.
 - Current full backend suite after Holdings foundation: **753 passed**.
+- Portfolio valuation + transaction repository focused regression suite: **53 passed**.
+- Wider valuation/holdings/market-data integration suite: **127 passed**.
+- Real PostgreSQL portfolio valuation smoke: **PASS**. It verified that future SELL does not affect historical as-of quantity, YAT uses NAV, BYF uses `exchange_bulletin_price` with no NAV fallback, USD/TRY TCMB midpoint FX conversion works, exact Decimal portfolio total is preserved, and the transaction was rolled back after the smoke.
+- Current full backend suite after Portfolio Valuation Aggregation v1: **885 passed**.
 
 ## Recent Git milestones
 
@@ -303,14 +308,17 @@ Final high-level classification:
 
 Work in small controlled increments. The TEFAS backend MVP data foundation is complete; remaining provider-specific items are deferred unless a concrete product requirement makes them necessary.
 
-1. **Implement portfolio valuation aggregation**
-   - Combine current derived Holdings quantities with `TefasValuationPriceService` and `FxConversionService`.
-   - Treat missing asset currency, valuation price or required FX rate as explicit unavailable/incomplete valuation data; never silently omit a positive holding from portfolio totals.
-   - Preserve market-data provenance in the valuation contract, including price date/kind and FX rate date/kind/source.
-   - Stabilize the portfolio valuation contract before adding portfolio weights or unrealized P/L.
-   - Do not start cost basis / realized P&L until the valuation foundation is stable and the cost-basis method is documented.
+1. **Expose Portfolio Valuation Aggregation v1 through a stable authenticated API contract**
+   - Map the existing service result to Pydantic response schemas.
+   - Preserve `valuation_date`, `COMPLETE`/`INCOMPLETE` status, unavailable reason, price provenance and FX provenance.
+   - Do not hide unavailable positive holdings.
+   - Do not add portfolio weights or P/L in the same slice.
 
-2. **Preserve the completed TEFAS foundation**
+2. **Add portfolio weights and unrealized P/L only after the valuation API contract is stable**
+   - Keep Decimal arithmetic.
+   - Do not start realized P/L until cost-basis methodology is explicitly selected and documented.
+
+3. **Preserve the completed TEFAS foundation**
    - Keep the verified daily `YAT`, `EMK`, `BYF`, `GYF` and `GSYF` bulk sync stable.
    - The data team is handling the five-year historical bulk dataset; do not duplicate that collection work.
    - Run focused tests and the full suite before each PR.
