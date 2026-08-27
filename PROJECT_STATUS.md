@@ -6,7 +6,7 @@
 - **Type:** Browser-based web application
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
-- **Current backend stage:** Authentication, Portfolio CRUD, Transaction and Holdings foundations are stable. TEFAS valuation-price and TCMB FX foundations are implemented and validated. Portfolio Valuation Aggregation v1 is now implemented and validated at service level: it derives holdings as-of `valuation_date` from Transaction history, combines holding quantity with TEFAS valuation price and FX conversion, preserves price/FX provenance, marks missing price/currency/FX as explicit `INCOMPLETE` valuation, and never presents a partial portfolio total as complete. Portfolio valuation API exposure, weights, cost basis and P/L remain incomplete.
+- **Current backend stage:** Authentication, Portfolio CRUD, Transaction and Holdings foundations are stable. TEFAS valuation-price and TCMB FX foundations are implemented and validated. Portfolio Valuation Aggregation v1 is implemented and validated, and is now also exposed through a stable authenticated API contract: `GET /api/v1/portfolios/{portfolio_id}/valuation?valuation_date=YYYY-MM-DD`. `valuation_date` is required. The API preserves `COMPLETE`/`INCOMPLETE` status, unavailable reason, price provenance and FX provenance. Decimal monetary values remain Decimal internally and serialize safely through the Pydantic/FastAPI response contract. Portfolio weights, cost basis and P/L remain incomplete.
 - **Status updated:** 2026-08-27
 
 ## Product summary
@@ -54,7 +54,7 @@ tests/
 | Holdings domain | Implemented / validated (foundation) | Holdings are derived from Transaction history without duplicated persisted holdings truth. `GET /api/v1/portfolios/{portfolio_id}/holdings` returns asset metadata and Decimal quantity for positive current holdings only; fully sold assets are omitted and ownership isolation is enforced. Service-level valuation aggregation now exists; portfolio weight, cost basis and P/L remain incomplete. |
 | Exchange-rate / TCMB foundation | Implemented / validated | PostgreSQL `exchange_rates` via migration `20260826_0013`; TCMB current/historical XML client preserves effective rate date and Decimal `ForexBuying`/`ForexSelling`; idempotent TCMB sync persists USD/TRY, EUR/TRY and GBP/TRY observations. |
 | Valuation market-data foundation | Implemented / validated (v1) | YAT/EMK/GYF/GSYF valuation uses TEFAS NAV `price`; BYF uses `exchange_bulletin_price` as exchange-market price with no silent NAV fallback. Price and FX lookups use latest-on-or-before semantics. FX conversion uses Decimal TCMB midpoint reference rates for identity/direct/inverse/cross conversions; foreign-to-foreign cross legs require the same effective date. |
-| Portfolio valuation aggregation | Implemented / validated (v1 service) | As-of holdings are derived from transactions using `transaction_date <= valuation_date` for positive holdings only, then composed with the TEFAS price selector and FX conversion using Decimal arithmetic. Results expose `COMPLETE` / `INCOMPLETE` status, preserve price and FX provenance, and keep `total_market_value` as `None` when any positive holding is unavailable. No API endpoint exists yet. |
+| Portfolio valuation aggregation | Implemented / validated (v1 API) | As-of holdings are derived from transactions using `transaction_date <= valuation_date` for positive holdings only, then composed with the TEFAS price selector and FX conversion using Decimal arithmetic. Results expose `COMPLETE` / `INCOMPLETE` status, preserve price and FX provenance, and keep `total_market_value` as `None` when any positive holding is unavailable. `GET /api/v1/portfolios/{portfolio_id}/valuation` exposes valuation through an authenticated Pydantic response contract with required `valuation_date`, preserved ownership isolation and unavailable positive holdings visible in `items`. |
 | TEFAS client/integration | Implemented and actively extended | General info, historical price, portfolio breakdown, management-fee source extraction/history persistence and bulk refresh/history sync for YAT/EMK and fund-detail page/profile metadata are used through the backend integration/service layer |
 | TEFAS daily raw data | Implemented | Core raw fields include fund code/name/date, price, shares outstanding, investor count, portfolio size and BYF exchange bulletin price where available |
 | TEFAS scheduled daily sync | Complete / merged | Default scheduled sync runs YAT, EMK, BYF, GYF and GSYF sequentially using fund-kind-level bulk general-info requests; merged in PR #34 |
@@ -276,6 +276,10 @@ Important verified checkpoints include:
 - Wider valuation/holdings/market-data integration suite: **127 passed**.
 - Real PostgreSQL portfolio valuation smoke: **PASS**. It verified that future SELL does not affect historical as-of quantity, YAT uses NAV, BYF uses `exchange_bulletin_price` with no NAV fallback, USD/TRY TCMB midpoint FX conversion works, exact Decimal portfolio total is preserved, and the transaction was rolled back after the smoke.
 - Current full backend suite after Portfolio Valuation Aggregation v1: **885 passed**.
+- Portfolio Valuation API focused response/API/service suite: **47 passed**.
+- Wider Portfolio/Transaction/Holdings/valuation API integration suite: **203 passed**.
+- Real PostgreSQL + FastAPI valuation endpoint smoke: **PASS**. It verified HTTP 200 through the actual FastAPI route/dependency graph, `valuation_date` response preservation, future SELL exclusion from historical as-of quantity, YAT NAV price, BYF `exchange_bulletin_price` / `EXCHANGE_MARKET`, USD/TRY TCMB midpoint FX, exact portfolio total, Decimal monetary values serialized as JSON strings, and smoke data rollback afterward.
+- Current full backend suite after Portfolio Valuation API Contract v1: **905 passed**.
 
 ## Recent Git milestones
 
@@ -308,15 +312,16 @@ Final high-level classification:
 
 Work in small controlled increments. The TEFAS backend MVP data foundation is complete; remaining provider-specific items are deferred unless a concrete product requirement makes them necessary.
 
-1. **Expose Portfolio Valuation Aggregation v1 through a stable authenticated API contract**
-   - Map the existing service result to Pydantic response schemas.
-   - Preserve `valuation_date`, `COMPLETE`/`INCOMPLETE` status, unavailable reason, price provenance and FX provenance.
-   - Do not hide unavailable positive holdings.
-   - Do not add portfolio weights or P/L in the same slice.
+1. **Add portfolio weights on top of the stable valuation API contract**
+   - Weight = complete holding market value / complete portfolio total.
+   - Use Decimal only.
+   - Do not calculate weights for an `INCOMPLETE` portfolio as if the portfolio total were complete.
+   - Preserve current valuation provenance and unavailable-item behavior.
+   - Keep this as a focused slice; do not add P/L in the same implementation.
 
-2. **Add portfolio weights and unrealized P/L only after the valuation API contract is stable**
-   - Keep Decimal arithmetic.
-   - Do not start realized P/L until cost-basis methodology is explicitly selected and documented.
+2. **Define and document the cost-basis methodology before implementing P/L**
+   - Do not guess FIFO / average-cost / another method.
+   - Unrealized and realized P/L work must use an explicitly selected, documented method.
 
 3. **Preserve the completed TEFAS foundation**
    - Keep the verified daily `YAT`, `EMK`, `BYF`, `GYF` and `GSYF` bulk sync stable.
