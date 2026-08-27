@@ -901,3 +901,137 @@ def test_sell_on_valuation_date_affects_that_dates_valuation(
     assert result.items[0].quantity == Decimal("6.00000000")
     assert result.items[0].market_value == Decimal("12.0000000000000000")
     assert result.total_market_value == Decimal("12.0000000000000000")
+
+def test_single_complete_holding_has_full_weight(db_session: Session) -> None:
+    user, portfolio, asset = _portfolio_with_single_holding(db_session)
+    _add_daily_data(db_session, asset_id=asset.id, price=Decimal("3.25000000"))
+    service = _create_service(db_session)
+
+    result = service.get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.items[0].weight == Decimal("1")
+
+
+def test_multiple_complete_holdings_have_exact_25_75_weights(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    first_asset = _create_asset(db_session, asset_code="WAA")
+    second_asset = _create_asset(db_session, asset_code="WAB")
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=first_asset.id, quantity=Decimal("5.00000000"))
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=second_asset.id, quantity=Decimal("15.00000000"))
+    _add_daily_data(db_session, asset_id=first_asset.id, price=Decimal("5.00000000"))
+    _add_daily_data(db_session, asset_id=second_asset.id, price=Decimal("5.00000000"))
+    service = _create_service(db_session)
+
+    result = service.get_valuation(portfolio_id=portfolio.id, current_user=user, valuation_date=VALUATION_DATE)
+
+    assert result.total_market_value == Decimal("100.0000000000000000")
+    assert result.items[0].market_value == Decimal("25.0000000000000000")
+    assert result.items[1].market_value == Decimal("75.0000000000000000")
+    assert result.items[0].weight == Decimal("0.25")
+    assert result.items[1].weight == Decimal("0.75")
+
+
+def test_weight_uses_portfolio_currency_market_value_after_fx_conversion(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id, base_currency="TRY")
+    try_asset = _create_asset(db_session, asset_code="WAC", currency="TRY")
+    usd_asset = _create_asset(db_session, asset_code="WAD", currency="USD")
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=try_asset.id, quantity=Decimal("50.00000000"))
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=usd_asset.id, quantity=Decimal("1.00000000"))
+    _add_daily_data(db_session, asset_id=try_asset.id, price=Decimal("1.00000000"))
+    _add_daily_data(db_session, asset_id=usd_asset.id, price=Decimal("5.00000000"))
+    _add_exchange_rate(db_session, base_currency="USD", forex_buying=Decimal("9.00000000"), forex_selling=Decimal("11.00000000"))
+    service = _create_service(db_session)
+
+    result = service.get_valuation(portfolio_id=portfolio.id, current_user=user, valuation_date=VALUATION_DATE)
+
+    assert result.items[0].native_market_value == Decimal("50.0000000000000000")
+    assert result.items[1].native_market_value == Decimal("5.0000000000000000")
+    assert result.items[1].market_value == Decimal("50.000000000000000000000000")
+    assert result.total_market_value == Decimal("100.000000000000000000000000")
+    assert result.items[0].weight == result.items[0].market_value / result.total_market_value
+    assert result.items[1].weight == result.items[1].market_value / result.total_market_value
+    assert result.items[1].weight == Decimal("0.5")
+
+
+def test_weight_decimal_arithmetic_is_preserved_without_rounding(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    first_asset = _create_asset(db_session, asset_code="WAE")
+    second_asset = _create_asset(db_session, asset_code="WAF")
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=first_asset.id, quantity=Decimal("1.00000000"))
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=second_asset.id, quantity=Decimal("2.00000000"))
+    _add_daily_data(db_session, asset_id=first_asset.id, price=Decimal("1.00000000"))
+    _add_daily_data(db_session, asset_id=second_asset.id, price=Decimal("1.00000000"))
+    service = _create_service(db_session)
+
+    result = service.get_valuation(portfolio_id=portfolio.id, current_user=user, valuation_date=VALUATION_DATE)
+
+    expected_weight = result.items[0].market_value / result.total_market_value
+    assert expected_weight == Decimal("1.0000000000000000") / Decimal("3.0000000000000000")
+    assert result.items[0].weight == expected_weight
+    assert isinstance(result.items[0].weight, Decimal)
+
+
+def test_incomplete_portfolio_has_no_item_weights(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    complete_asset = _create_asset(db_session, asset_code="WAG")
+    unavailable_asset = _create_asset(db_session, asset_code="WAH")
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=complete_asset.id)
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=unavailable_asset.id)
+    _add_daily_data(db_session, asset_id=complete_asset.id, price=Decimal("2.00000000"))
+    service = _create_service(db_session)
+
+    result = service.get_valuation(portfolio_id=portfolio.id, current_user=user, valuation_date=VALUATION_DATE)
+
+    assert result.status == "INCOMPLETE"
+    assert result.total_market_value is None
+    assert all(item.weight is None for item in result.items)
+
+
+def test_complete_item_inside_incomplete_portfolio_has_no_weight(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    complete_asset = _create_asset(db_session, asset_code="WAI")
+    missing_price_asset = _create_asset(db_session, asset_code="WAJ")
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=complete_asset.id)
+    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=missing_price_asset.id)
+    _add_daily_data(db_session, asset_id=complete_asset.id, price=Decimal("2.00000000"))
+    service = _create_service(db_session)
+
+    result = service.get_valuation(portfolio_id=portfolio.id, current_user=user, valuation_date=VALUATION_DATE)
+
+    assert result.items[0].status == "COMPLETE"
+    assert result.items[0].market_value == Decimal("20.0000000000000000")
+    assert result.items[0].weight is None
+    assert result.items[1].status == "UNAVAILABLE"
+    assert result.items[1].weight is None
+
+
+def test_unavailable_item_weight_is_none(db_session: Session) -> None:
+    user, portfolio, _asset = _portfolio_with_single_holding(db_session)
+    service = _create_service(db_session)
+
+    result = service.get_valuation(portfolio_id=portfolio.id, current_user=user, valuation_date=VALUATION_DATE)
+
+    assert result.items[0].status == "UNAVAILABLE"
+    assert result.items[0].weight is None
+
+
+def test_empty_portfolio_has_no_weight_calculation(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    service = _create_service(db_session)
+
+    result = service.get_valuation(portfolio_id=portfolio.id, current_user=user, valuation_date=VALUATION_DATE)
+
+    assert result.status == "COMPLETE"
+    assert result.total_market_value == Decimal("0")
+    assert result.items == ()

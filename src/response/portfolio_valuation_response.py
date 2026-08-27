@@ -26,6 +26,7 @@ class PortfolioValuationItemResponse(BaseModel):
     fx_source: str | None
     native_market_value: Decimal | None
     market_value: Decimal | None
+    weight: Decimal | None
 
 
 class PortfolioValuationResponse(BaseModel):

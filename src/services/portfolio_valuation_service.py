@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 
@@ -48,6 +48,7 @@ class PortfolioValuationItem:
     fx_source: str | None
     native_market_value: Decimal | None
     market_value: Decimal | None
+    weight: Decimal | None
 
 
 @dataclass(frozen=True)
@@ -121,6 +122,10 @@ class PortfolioValuationService:
             total_market_value = sum(
                 (item.market_value for item in items),
                 Decimal("0"),
+            )
+            items = tuple(
+                replace(item, weight=item.market_value / total_market_value)
+                for item in items
             )
             portfolio_status = PORTFOLIO_STATUS_COMPLETE
 
@@ -208,6 +213,7 @@ class PortfolioValuationService:
             fx_source=fx_rate.source,
             native_market_value=native_market_value,
             market_value=market_value,
+            weight=None,
         )
 
     @staticmethod
@@ -248,4 +254,5 @@ class PortfolioValuationService:
             fx_source=None,
             native_market_value=native_market_value,
             market_value=None,
+            weight=None,
         )
