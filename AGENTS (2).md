@@ -192,6 +192,21 @@ holding quantity = sum(BUY quantity) - sum(SELL quantity)
   asset currency or FX data is unavailable, portfolio valuation must be marked
   `INCOMPLETE` and total market value must remain unavailable. Never present a
   partial sum of only valued holdings as a complete portfolio total.
+- Portfolio item weight is a `Decimal` ratio in `0..1` form, not percentage
+  points.
+- For a complete non-empty portfolio:
+  ```text
+  weight = item.market_value / portfolio.total_market_value
+  ```
+- Weight must use portfolio-currency `market_value`, never
+  `native_market_value`.
+- Do not use float, round or quantize internally when calculating weights.
+- For an `INCOMPLETE` portfolio, every item weight must be unavailable (`None`),
+  including otherwise complete items whose `market_value` is known. Never
+  calculate weights from only the successfully valued subset of an incomplete
+  portfolio.
+- Empty `COMPLETE` portfolios remain `total_market_value = Decimal("0")` with
+  no items, so no weight division is performed.
 
 ### Data collection
 

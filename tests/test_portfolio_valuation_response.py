@@ -29,6 +29,7 @@ def test_portfolio_valuation_response_maps_from_service_dataclasses() -> None:
         fx_source="IDENTITY",
         native_market_value=Decimal("32.5000000000000000"),
         market_value=Decimal("32.5000000000000000"),
+        weight=Decimal("1"),
     )
     result = PortfolioValuationResult(
         portfolio_id=10,
@@ -50,6 +51,7 @@ def test_portfolio_valuation_response_maps_from_service_dataclasses() -> None:
     assert len(response.items) == 1
     assert response.items[0].asset_code == "AAL"
     assert response.items[0].market_value == Decimal("32.5000000000000000")
+    assert response.items[0].weight == Decimal("1")
 
 
 def test_portfolio_valuation_response_serializes_decimals_as_strings() -> None:
@@ -88,6 +90,7 @@ def test_portfolio_valuation_response_preserves_nullable_provenance_fields() -> 
         fx_source=None,
         native_market_value=None,
         market_value=None,
+        weight=None,
     )
     result = PortfolioValuationResult(
         portfolio_id=10,
@@ -106,3 +109,75 @@ def test_portfolio_valuation_response_preserves_nullable_provenance_fields() -> 
     assert response.items[0].price == Decimal("3.25000000")
     assert response.items[0].fx_rate is None
     assert response.items[0].market_value is None
+    assert response.items[0].weight is None
+
+
+def test_portfolio_valuation_response_serializes_item_weight_as_string() -> None:
+    item = PortfolioValuationItem(
+        asset_id=1,
+        asset_code="AAL",
+        asset_name="AAL Example Fund",
+        quantity=Decimal("10.00000000"),
+        asset_currency="TRY",
+        status="COMPLETE",
+        unavailable_reason=None,
+        price=Decimal("3.25000000"),
+        price_date=date(2026, 8, 26),
+        price_kind="NAV",
+        price_source="TEFAS",
+        fx_rate=Decimal("1"),
+        fx_rate_date=None,
+        fx_rate_kind="IDENTITY",
+        fx_source="IDENTITY",
+        native_market_value=Decimal("32.5000000000000000"),
+        market_value=Decimal("32.5000000000000000"),
+        weight=Decimal("0.25"),
+    )
+    result = PortfolioValuationResult(
+        portfolio_id=10,
+        base_currency="TRY",
+        valuation_date=date(2026, 8, 26),
+        status="COMPLETE",
+        total_market_value=Decimal("130.0000000000000000"),
+        items=(item,),
+    )
+
+    dumped = PortfolioValuationResponse.model_validate(result).model_dump(mode="json")
+
+    assert dumped["items"][0]["weight"] == "0.25"
+    assert isinstance(dumped["items"][0]["weight"], str)
+
+
+def test_portfolio_valuation_response_serializes_none_weight_as_null() -> None:
+    item = PortfolioValuationItem(
+        asset_id=1,
+        asset_code="AAL",
+        asset_name="AAL Example Fund",
+        quantity=Decimal("10.00000000"),
+        asset_currency="TRY",
+        status="UNAVAILABLE",
+        unavailable_reason="PRICE_UNAVAILABLE",
+        price=None,
+        price_date=None,
+        price_kind=None,
+        price_source=None,
+        fx_rate=None,
+        fx_rate_date=None,
+        fx_rate_kind=None,
+        fx_source=None,
+        native_market_value=None,
+        market_value=None,
+        weight=None,
+    )
+    result = PortfolioValuationResult(
+        portfolio_id=10,
+        base_currency="TRY",
+        valuation_date=date(2026, 8, 26),
+        status="INCOMPLETE",
+        total_market_value=None,
+        items=(item,),
+    )
+
+    dumped = PortfolioValuationResponse.model_validate(result).model_dump(mode="json")
+
+    assert dumped["items"][0]["weight"] is None

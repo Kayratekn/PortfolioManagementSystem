@@ -294,6 +294,7 @@ def test_complete_try_holding_exposes_nav_identity_fx_and_market_value(
     assert item["fx_source"] == "IDENTITY"
     assert item["native_market_value"] == "32.5000000000000000"
     assert item["market_value"] == "32.5000000000000000"
+    assert item["weight"] == "1"
 
 
 def test_decimal_values_serialize_as_strings_never_floats(client, db_session: Session) -> None:
@@ -326,6 +327,7 @@ def test_decimal_values_serialize_as_strings_never_floats(client, db_session: Se
         item["fx_rate"],
         item["native_market_value"],
         item["market_value"],
+        item["weight"],
     ]
     assert all(isinstance(value, str) for value in decimal_fields)
     assert not any(isinstance(value, float) for value in decimal_fields)
@@ -546,6 +548,7 @@ def test_missing_asset_currency_is_incomplete_and_preserves_price_provenance(
     assert item["price_source"] == "TEFAS"
     assert item["native_market_value"] is None
     assert item["market_value"] is None
+    assert item["weight"] is None
 
 
 def test_missing_fx_is_incomplete_and_preserves_native_value_and_price_provenance(
@@ -579,6 +582,7 @@ def test_missing_fx_is_incomplete_and_preserves_native_value_and_price_provenanc
     assert item["native_market_value"] == "20.0000000000000000"
     assert item["fx_rate"] is None
     assert item["market_value"] is None
+    assert item["weight"] is None
 
 
 def test_complete_item_retains_market_value_when_portfolio_is_incomplete(
@@ -620,8 +624,10 @@ def test_complete_item_retains_market_value_when_portfolio_is_incomplete(
     unavailable_item = body["items"][1]
     assert complete_item["status"] == "COMPLETE"
     assert complete_item["market_value"] == "14.0000000000000000"
+    assert complete_item["weight"] is None
     assert unavailable_item["status"] == "UNAVAILABLE"
     assert unavailable_item["unavailable_reason"] == "PRICE_UNAVAILABLE"
+    assert unavailable_item["weight"] is None
 
 
 def test_unavailable_positive_holding_is_not_hidden_from_items(
@@ -652,3 +658,75 @@ def test_unavailable_positive_holding_is_not_hidden_from_items(
     assert len(body["items"]) == 1
     assert body["items"][0]["asset_id"] == asset.id
     assert body["items"][0]["unavailable_reason"] == "PRICE_UNAVAILABLE"
+    assert body["items"][0]["weight"] is None
+
+def test_complete_multi_holding_portfolio_exposes_weight_ratios(client, db_session: Session) -> None:
+    token, portfolio_id = create_owner_portfolio(client, email="valuation-api-weights@example.com", username="valuation-api-weights")
+    first_asset = create_tefas_asset(db_session, asset_code="WBA")
+    second_asset = create_tefas_asset(db_session, asset_code="WBB")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=first_asset.id, quantity=Decimal("5.00000000"))
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=second_asset.id, quantity=Decimal("15.00000000"))
+    add_daily_data(db_session, asset_id=first_asset.id, price=Decimal("5.00000000"))
+    add_daily_data(db_session, asset_id=second_asset.id, price=Decimal("5.00000000"))
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items[0]["market_value"] == "25.0000000000000000"
+    assert items[1]["market_value"] == "75.0000000000000000"
+    assert items[0]["weight"] == "0.25"
+    assert items[1]["weight"] == "0.75"
+
+
+def test_fx_converted_holding_weight_uses_converted_market_value(client, db_session: Session) -> None:
+    token, portfolio_id = create_owner_portfolio(client, email="valuation-api-fx-weight@example.com", username="valuation-api-fx-weight")
+    try_asset = create_tefas_asset(db_session, asset_code="WBC", currency="TRY")
+    usd_asset = create_tefas_asset(db_session, asset_code="WBD", currency="USD")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=try_asset.id, quantity=Decimal("50.00000000"))
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=usd_asset.id, quantity=Decimal("1.00000000"))
+    add_daily_data(db_session, asset_id=try_asset.id, price=Decimal("1.00000000"))
+    add_daily_data(db_session, asset_id=usd_asset.id, price=Decimal("5.00000000"))
+    add_exchange_rate(db_session, base_currency="USD", forex_buying=Decimal("9.00000000"), forex_selling=Decimal("11.00000000"))
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert items[1]["native_market_value"] == "5.0000000000000000"
+    assert items[1]["market_value"] == "50.000000000000000000000000"
+    assert items[1]["weight"] == "0.5"
+
+
+def test_incomplete_portfolio_exposes_null_weight_for_all_items(client, db_session: Session) -> None:
+    token, portfolio_id = create_owner_portfolio(client, email="valuation-api-incomplete-weights@example.com", username="valuation-api-incomplete-weights")
+    complete_asset = create_tefas_asset(db_session, asset_code="WBE")
+    unavailable_asset = create_tefas_asset(db_session, asset_code="WBF")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=complete_asset.id)
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=unavailable_asset.id)
+    add_daily_data(db_session, asset_id=complete_asset.id, price=Decimal("2.00000000"))
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "INCOMPLETE"
+    assert body["total_market_value"] is None
+    assert body["items"][0]["status"] == "COMPLETE"
+    assert body["items"][0]["market_value"] == "20.0000000000000000"
+    assert all(item["weight"] is None for item in body["items"])
+
+
+def test_weight_is_serialized_as_string_never_float(client, db_session: Session) -> None:
+    token, portfolio_id = create_owner_portfolio(client, email="valuation-api-weight-string@example.com", username="valuation-api-weight-string")
+    asset = create_tefas_asset(db_session, asset_code="WBG")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=asset.id)
+    add_daily_data(db_session, asset_id=asset.id, price=Decimal("2.00000000"))
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    weight = response.json()["items"][0]["weight"]
+    assert weight == "1"
+    assert isinstance(weight, str)
+    assert not isinstance(weight, float)
