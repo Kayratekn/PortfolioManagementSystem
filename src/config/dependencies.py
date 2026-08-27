@@ -10,15 +10,19 @@ from sqlalchemy.orm import Session
 from src.config.database import get_db_session
 from src.config.settings import get_settings
 from src.repositories.asset_repository import AssetRepository
+from src.repositories.exchange_rate_repository import ExchangeRateRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
+from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
 from src.services.portfolio_service import PortfolioService
+from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
+from src.services.tefas_valuation_price_service import TefasValuationPriceService
 from src.services.token_service import TokenService
 from src.services.transaction_service import TransactionService
 from src.services.user_service import UserService
@@ -45,6 +49,10 @@ def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetReposi
 
 def get_transaction_repository(db: Annotated[Session, Depends(get_db)]) -> TransactionRepository:
     return TransactionRepository(db)
+
+
+def get_exchange_rate_repository(db: Annotated[Session, Depends(get_db)]) -> ExchangeRateRepository:
+    return ExchangeRateRepository(db)
 
 
 def get_tefas_fund_allocation_data_repository(
@@ -107,6 +115,47 @@ def get_holding_service(
     return HoldingService(
         portfolio_repository=portfolio_repository,
         transaction_repository=transaction_repository,
+    )
+
+
+def get_tefas_valuation_price_service(
+    daily_data_repository: Annotated[
+        TefasFundDailyDataRepository,
+        Depends(get_tefas_fund_daily_data_repository),
+    ],
+) -> TefasValuationPriceService:
+    return TefasValuationPriceService(daily_data_repository)
+
+
+def get_fx_conversion_service(
+    exchange_rate_repository: Annotated[
+        ExchangeRateRepository,
+        Depends(get_exchange_rate_repository),
+    ],
+) -> FxConversionService:
+    return FxConversionService(exchange_rate_repository)
+
+
+def get_portfolio_valuation_service(
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    transaction_repository: Annotated[
+        TransactionRepository,
+        Depends(get_transaction_repository),
+    ],
+    tefas_valuation_price_service: Annotated[
+        TefasValuationPriceService,
+        Depends(get_tefas_valuation_price_service),
+    ],
+    fx_conversion_service: Annotated[
+        FxConversionService,
+        Depends(get_fx_conversion_service),
+    ],
+) -> PortfolioValuationService:
+    return PortfolioValuationService(
+        portfolio_repository=portfolio_repository,
+        transaction_repository=transaction_repository,
+        tefas_valuation_price_service=tefas_valuation_price_service,
+        fx_conversion_service=fx_conversion_service,
     )
 
 
