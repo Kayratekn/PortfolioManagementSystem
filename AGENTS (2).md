@@ -144,6 +144,9 @@ holding quantity = sum(BUY quantity) - sum(SELL quantity)
 
 - Do not treat a mutable `holdings` table as the primary financial record.
 - A holdings view or cache may be introduced later for performance.
+- Historical portfolio valuation must derive holding quantities from
+  transactions on or before the requested valuation date. Future transactions
+  must never affect a historical valuation.
 - Reject zero or negative quantities and prices.
 - Reject a sell that exceeds the currently available quantity.
 - Do not delete historical transactions or prices after an asset is sold.
@@ -185,6 +188,10 @@ holding quantity = sum(BUY quantity) - sum(SELL quantity)
   have the same effective `rate_date`; otherwise the conversion is unavailable.
 - If `Asset.currency` is unknown, do not infer or hardcode a currency.
   FX-dependent valuation must remain unavailable until a reliable currency is known.
+- If any positive holding cannot be valued because required valuation price,
+  asset currency or FX data is unavailable, portfolio valuation must be marked
+  `INCOMPLETE` and total market value must remain unavailable. Never present a
+  partial sum of only valued holdings as a complete portfolio total.
 
 ### Data collection
 
