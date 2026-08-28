@@ -154,6 +154,69 @@ holding quantity = sum(BUY quantity) - sum(SELL quantity)
 - The initial transaction types are `BUY` and `SELL`. Additional transaction
   types require a documented schema and calculation change.
 
+### Cost Basis v1
+
+Cost Basis v1 uses Moving Weighted Average Cost as an application/accounting
+convention for this portfolio analytics project. Do not describe this
+methodology as tax/legal accounting advice or claim that it is legally required.
+
+- Transactions remain the sole source of truth.
+- Cost basis is derived by replaying transaction history; do not add a mutable
+  persisted holdings/cost-basis table for v1.
+- Replay order must be deterministic: `transaction_date ASC`, then transaction
+  `id ASC`.
+- Use `Decimal` only. Never use `float`.
+- Do not round or quantize internal cost-basis calculations.
+
+BUY behavior:
+
+```text
+buy_cost = buy_quantity * buy_unit_price
+new_total_cost = previous_total_cost + buy_cost
+new_quantity = previous_quantity + buy_quantity
+average_cost_per_unit = new_total_cost / new_quantity
+```
+
+SELL behavior:
+
+```text
+cost_removed = sell_quantity * current_average_cost_per_unit
+remaining_total_cost = previous_total_cost - cost_removed
+remaining_quantity = previous_quantity - sell_quantity
+```
+
+- A SELL does not change the average cost per unit of the remaining units,
+  except that when remaining quantity becomes zero the cost basis state is reset
+  to zero.
+- Existing oversell validation remains authoritative.
+
+Historical/as-of behavior:
+
+- Cost basis for an as-of date must use only transactions whose
+  `transaction_date <= requested date`.
+- Future transactions must never change historical cost basis.
+- Same-date ordering remains `transaction_date ASC`, `id ASC`.
+
+Currency:
+
+- Cost Basis v1 is calculated in the asset's native `Asset.currency`.
+- Do not silently infer a missing `Asset.currency`.
+- Conversion of cost basis or P/L into portfolio base currency is not part of
+  this methodology slice and requires separate FX semantics later.
+
+Fees/taxes:
+
+- `Transaction` currently has no fee, commission or tax fields.
+- Cost Basis v1 therefore uses `quantity * unit_price` only.
+- Do not invent fee/commission/tax behavior.
+
+Realized P/L:
+
+- Do not implement realized P/L as part of documenting this methodology.
+- Future realized P/L under this methodology will use the current moving average
+  cost at the SELL point.
+- Exact P/L and FX contract remains a later implementation/design slice.
+
 ### Financial precision
 
 - Use `Decimal`/database `NUMERIC`, not binary floating-point values, for money,
@@ -164,7 +227,7 @@ holding quantity = sum(BUY quantity) - sum(SELL quantity)
   required for one USD.
 - Round only at defined output boundaries; do not repeatedly round intermediate
   calculations.
-- The cost-basis method must be selected and documented before realized
+- The selected cost-basis method must be followed before unrealized or realized
   profit/loss is implemented.
 
 ### Market data
