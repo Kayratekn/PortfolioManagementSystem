@@ -26,6 +26,7 @@ from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
 from src.services.token_service import TokenService
 from src.services.transaction_service import TransactionService
+from src.services.unrealized_pl_service import UnrealizedPlService
 from src.services.user_service import UserService
 
 
@@ -140,6 +141,26 @@ def get_tefas_valuation_price_service(
 ) -> TefasValuationPriceService:
     return TefasValuationPriceService(daily_data_repository)
 
+
+def get_unrealized_pl_service(
+    cost_basis_service: Annotated[
+        CostBasisService,
+        Depends(get_cost_basis_service),
+    ],
+    transaction_repository: Annotated[
+        TransactionRepository,
+        Depends(get_transaction_repository),
+    ],
+    tefas_valuation_price_service: Annotated[
+        TefasValuationPriceService,
+        Depends(get_tefas_valuation_price_service),
+    ],
+) -> UnrealizedPlService:
+    return UnrealizedPlService(
+        cost_basis_service=cost_basis_service,
+        transaction_repository=transaction_repository,
+        tefas_valuation_price_service=tefas_valuation_price_service,
+    )
 
 def get_fx_conversion_service(
     exchange_rate_repository: Annotated[
