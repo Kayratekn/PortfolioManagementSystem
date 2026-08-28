@@ -217,6 +217,125 @@ Realized P/L:
   cost at the SELL point.
 - Exact P/L and FX contract remains a later implementation/design slice.
 
+### Unrealized P/L v1
+
+Unrealized P/L v1 is calculated only in each asset's native currency.
+It is not portfolio-base-currency P/L, FX-adjusted P/L or tax/legal advice.
+
+Formula:
+
+```text
+native_market_value = quantity * selected_price
+native_unrealized_pl = native_market_value - total_cost_basis
+```
+
+- Use `Decimal` only. Never use `float`.
+- Do not round or quantize internal Unrealized P/L calculations.
+- Negative, zero and positive unrealized P/L values are all valid.
+- Cost Basis and valuation must refer to the same requested `as_of_date`.
+
+Historical/as-of behavior:
+
+- Use one requested `as_of_date`.
+- Cost basis must use the existing Moving Weighted Average Cost result derived
+  from transactions where `transaction_date <= as_of_date`.
+- Future transactions must not affect historical Unrealized P/L.
+- Market value must use existing valuation price-selection semantics.
+- Price lookup is latest-on-or-before `as_of_date`; the effective price date may
+  be earlier than `as_of_date`.
+- `YAT`, `EMK`, `GYF` and `GSYF` use TEFAS NAV `price`.
+- `BYF` uses `exchange_bulletin_price`; do not silently fall back to NAV.
+
+Currency and FX:
+
+- Unrealized P/L v1 is native-currency only.
+- Do not define, implement or expose portfolio-base-currency unrealized P/L in
+  v1.
+- Do not convert native cost basis with the valuation-date FX rate.
+- Portfolio-base-currency P/L requires a separate historical FX cost-basis
+  contract using transaction-date FX semantics. Converting historical native
+  cost basis using only current/as-of valuation FX can produce financially
+  incorrect base-currency P/L.
+- V1 must not expose converted cost basis, portfolio-currency unrealized P/L,
+  FX-adjusted unrealized P/L or portfolio-level total unrealized P/L.
+- Different native currencies must never be summed directly.
+- `FX_UNAVAILABLE` alone must not make native Unrealized P/L unavailable. If
+  price, `Asset.currency` and native Cost Basis are available, native Unrealized
+  P/L remains calculable even when portfolio valuation cannot convert the asset
+  into portfolio base currency because FX is unavailable.
+
+Availability:
+
+- Native Unrealized P/L is unavailable when a required native input is
+  unavailable, including `PRICE_UNAVAILABLE`, `ASSET_CURRENCY_UNAVAILABLE`,
+  `UNSUPPORTED_ASSET` or unavailable Cost Basis input.
+- Preserve the concrete unavailable reason when possible.
+- Current market-data support remains unchanged. Do not claim manual/non-TEFAS
+  assets have Unrealized P/L support merely because Cost Basis supports them.
+  Without a supported valuation price, they remain `UNSUPPORTED_ASSET` for
+  Unrealized P/L v1.
+
+Planned service-level result contract:
+
+`UnrealizedPlItem` fields:
+
+- `asset_id`
+- `asset_code`
+- `asset_name`
+- `asset_currency`
+- `status`
+- `unavailable_reason`
+- `quantity`
+- `total_cost_basis`
+- `average_cost_per_unit`
+- `price`
+- `price_date`
+- `price_kind`
+- `price_source`
+- `native_market_value`
+- `native_unrealized_pl`
+
+`UnrealizedPlResult` fields:
+
+- `portfolio_id`
+- `as_of_date`
+- `status`
+- `items`
+
+Result semantics:
+
+- Item status is `COMPLETE` or `UNAVAILABLE`.
+- Result status is `COMPLETE` when every positive holding has calculable native
+  Unrealized P/L.
+- Result status is `INCOMPLETE` when any positive holding is unavailable.
+- A `COMPLETE` item may remain complete inside an `INCOMPLETE` result.
+- Empty portfolios are `COMPLETE` with empty `items`.
+- Fully sold assets are omitted because only positive as-of holdings are
+  relevant.
+- Do not expose a portfolio-level Unrealized P/L total in v1.
+
+Consistency and safety:
+
+- For each asset, Cost Basis and valuation derived positive holding quantity
+  must agree for the same portfolio and `as_of_date`.
+- If asset sets or quantities disagree for the same portfolio and `as_of_date`,
+  treat this as an internal invariant violation rather than silently calculating
+  P/L from inconsistent data.
+- Do not invent missing currency, price or market-data support.
+
+Out of scope for v1:
+
+- Unrealized P/L percentage/return.
+- Portfolio-base-currency unrealized P/L.
+- Historical transaction-date FX cost basis.
+- Portfolio-level total Unrealized P/L.
+- Realized P/L.
+- Fees, commissions or taxes.
+- New API endpoint.
+- Migration, table or schema changes.
+
+Realized P/L remains a separate later methodology/implementation slice.
+
 ### Financial precision
 
 - Use `Decimal`/database `NUMERIC`, not binary floating-point values, for money,
