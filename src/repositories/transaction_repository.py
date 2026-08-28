@@ -37,12 +37,41 @@ class TransactionRepository:
         portfolio_id: int,
         asset_id: int,
     ) -> list[Transaction]:
+        return self._list_by_portfolio_and_asset(
+            portfolio_id=portfolio_id,
+            asset_id=asset_id,
+        )
+
+    def list_by_portfolio_and_asset_on_or_before(
+        self,
+        *,
+        portfolio_id: int,
+        asset_id: int,
+        transaction_date: date,
+    ) -> list[Transaction]:
+        return self._list_by_portfolio_and_asset(
+            portfolio_id=portfolio_id,
+            asset_id=asset_id,
+            transaction_date=transaction_date,
+        )
+
+    def _list_by_portfolio_and_asset(
+        self,
+        *,
+        portfolio_id: int,
+        asset_id: int,
+        transaction_date: date | None = None,
+    ) -> list[Transaction]:
+        filters = [
+            Transaction.portfolio_id == portfolio_id,
+            Transaction.asset_id == asset_id,
+        ]
+        if transaction_date is not None:
+            filters.append(Transaction.transaction_date <= transaction_date)
+
         statement = (
             select(Transaction)
-            .where(
-                Transaction.portfolio_id == portfolio_id,
-                Transaction.asset_id == asset_id,
-            )
+            .where(*filters)
             .order_by(Transaction.transaction_date.asc(), Transaction.id.asc())
         )
         return list(self.db.scalars(statement))
