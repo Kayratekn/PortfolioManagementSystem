@@ -785,3 +785,178 @@ def test_list_holdings_by_portfolio_on_or_before_ignores_other_portfolio_transac
     )
 
     assert result == [(asset, Decimal("5.00000000"))]
+
+def test_list_by_portfolio_and_asset_on_or_before_excludes_future_transactions(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    included = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 25),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 27),
+        )
+    )
+
+    result = repository.list_by_portfolio_and_asset_on_or_before(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == [included]
+
+
+def test_list_by_portfolio_and_asset_on_or_before_includes_exact_requested_date(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    earlier = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 25),
+        )
+    )
+    exact = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 26),
+        )
+    )
+
+    result = repository.list_by_portfolio_and_asset_on_or_before(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == [earlier, exact]
+
+
+def test_list_by_portfolio_and_asset_on_or_before_orders_by_date_ascending(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    later = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 26),
+        )
+    )
+    earlier = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+
+    result = repository.list_by_portfolio_and_asset_on_or_before(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        transaction_date=date(2026, 8, 26),
+    )
+
+    assert result == [earlier, later]
+
+
+def test_list_by_portfolio_and_asset_on_or_before_orders_same_date_by_id_ascending(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    first = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=TRANSACTION_DATE,
+        )
+    )
+    second = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=TRANSACTION_DATE,
+        )
+    )
+
+    result = repository.list_by_portfolio_and_asset_on_or_before(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        transaction_date=TRANSACTION_DATE,
+    )
+
+    assert first.id < second.id
+    assert result == [first, second]
+
+
+def test_list_by_portfolio_and_asset_on_or_before_isolates_portfolio_and_asset(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    other_user = _create_user(
+        db_session,
+        email="as-of-history-other@example.com",
+        username="as-of-history-other",
+    )
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=other_user.id,
+        name="As Of History Other Portfolio",
+    )
+    other_asset = _create_asset(db_session, asset_code="HST")
+    repository = TransactionRepository(db_session)
+    matching = repository.add(
+        _build_transaction(portfolio_id=portfolio.id, asset_id=asset.id)
+    )
+    repository.add(_build_transaction(portfolio_id=other_portfolio.id, asset_id=asset.id))
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=other_asset.id))
+
+    result = repository.list_by_portfolio_and_asset_on_or_before(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        transaction_date=TRANSACTION_DATE,
+    )
+
+    assert result == [matching]
+
+
+def test_list_by_portfolio_and_asset_still_includes_future_transactions(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    earlier = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 25),
+        )
+    )
+    future = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 27),
+        )
+    )
+
+    result = repository.list_by_portfolio_and_asset(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+    )
+
+    assert result == [earlier, future]
