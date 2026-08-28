@@ -16,6 +16,7 @@ from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllo
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
+from src.services.cost_basis_service import CostBasisService
 from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
 from src.services.portfolio_service import PortfolioService
@@ -113,6 +114,19 @@ def get_holding_service(
     ],
 ) -> HoldingService:
     return HoldingService(
+        portfolio_repository=portfolio_repository,
+        transaction_repository=transaction_repository,
+    )
+
+
+def get_cost_basis_service(
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    transaction_repository: Annotated[
+        TransactionRepository,
+        Depends(get_transaction_repository),
+    ],
+) -> CostBasisService:
+    return CostBasisService(
         portfolio_repository=portfolio_repository,
         transaction_repository=transaction_repository,
     )
