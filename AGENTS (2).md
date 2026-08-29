@@ -212,10 +212,136 @@ Fees/taxes:
 
 Realized P/L:
 
+- Realized P/L v1 is documented as an application/accounting convention for
+  this portfolio analytics project, not tax/legal advice.
+- Transactions remain the sole source of truth.
+- Realized P/L v1 uses the existing Moving Weighted Average Cost methodology.
 - Do not implement realized P/L as part of documenting this methodology.
-- Future realized P/L under this methodology will use the current moving average
-  cost at the SELL point.
-- Exact P/L and FX contract remains a later implementation/design slice.
+
+For every SELL, using the moving average cost immediately before that SELL:
+
+```text
+sell_proceeds = sell_quantity * sell_unit_price
+cost_removed = sell_quantity * current_average_cost_per_unit_before_sell
+native_realized_pl_for_sell = sell_proceeds - cost_removed
+```
+
+For one asset:
+
+```text
+native_realized_pl_for_asset =
+    sum(native_realized_pl_for_sell for all included SELL transactions)
+
+realized_proceeds = sum(sell_quantity * sell_unit_price)
+realized_cost_basis = sum(cost_removed for all included SELL transactions)
+native_realized_pl = realized_proceeds - realized_cost_basis
+```
+
+- Use `Decimal` only. Never use `float`.
+- Do not round or quantize internal Realized P/L calculations.
+- Negative, zero and positive Realized P/L are all valid.
+
+Replay / Cost Basis consistency:
+
+- Replay transactions deterministically: `transaction_date ASC`, then `id ASC`.
+- BUY behavior remains the existing Moving Weighted Average Cost behavior.
+- For SELL, calculate Realized P/L using the average cost immediately before the
+  SELL, then remove cost using the same average.
+- A partial SELL leaves remaining average cost unchanged.
+- A full SELL resets quantity, total cost and average cost to zero.
+- A later BUY after full exit starts a new cost-basis cycle.
+- Later SELLs contribute additional Realized P/L.
+- Existing oversell validation remains authoritative.
+- Defensive replay must fail on an invalid historical oversell.
+- Do not derive Realized P/L only from the ending `CostBasisResult`; the
+  SELL-point average cost is required.
+- Future implementation must keep Cost Basis and Realized P/L on one canonical
+  Moving Weighted Average replay behavior. Do not create two financial
+  algorithms that can silently diverge.
+- Do not implement or refactor this replay in the methodology-only slice.
+
+Historical/as-of behavior:
+
+- Realized P/L v1 uses one required `as_of_date`.
+- Include only transactions where `transaction_date <= as_of_date`.
+- Future BUY and SELL transactions must never affect historical Realized P/L.
+- Transactions exactly on `as_of_date` are included.
+- Same-date ordering remains `transaction_date ASC`, `id ASC`.
+- Realized P/L is cumulative through `as_of_date` in v1.
+- Do not define a from/to period contract in v1.
+- Fully sold assets must remain relevant to Realized P/L if they had at least
+  one SELL on or before `as_of_date`.
+- Do not use positive holdings as the Realized P/L asset universe.
+- Assets with no SELL on or before `as_of_date` do not need a Realized P/L item.
+- No SELLs produce a `COMPLETE` result with empty `items`.
+
+Currency and FX:
+
+- Realized P/L v1 is native-currency only.
+- Use `Asset.currency`.
+- Do not infer missing or blank `Asset.currency`.
+- Missing or blank currency makes the item `UNAVAILABLE` with
+  `unavailable_reason = ASSET_CURRENCY_UNAVAILABLE`.
+- Do not define or expose portfolio-base-currency Realized P/L, FX-adjusted
+  Realized P/L, converted realized proceeds, converted realized cost basis or a
+  portfolio-level Realized P/L total in v1.
+- Different native currencies must never be summed directly.
+- Realized P/L v1 does not require market valuation price data.
+- Manual/non-TEFAS assets with known currency can be supported.
+- `TefasValuationPriceService` and `FxConversionService` are not required by
+  the Realized P/L v1 financial methodology.
+
+Planned service-level result contract:
+
+`RealizedPlItem` fields:
+
+- `asset_id`
+- `asset_code`
+- `asset_name`
+- `asset_currency`
+- `status`
+- `unavailable_reason`
+- `sold_quantity`
+- `realized_proceeds`
+- `realized_cost_basis`
+- `native_realized_pl`
+
+`RealizedPlResult` fields:
+
+- `portfolio_id`
+- `as_of_date`
+- `status`
+- `items`
+
+Result semantics:
+
+- Item status is `COMPLETE` or `UNAVAILABLE`.
+- Result status is `COMPLETE` when every included Realized P/L item is
+  calculable.
+- Result status is `INCOMPLETE` when at least one included item is unavailable.
+- A `COMPLETE` item remains complete inside an `INCOMPLETE` result.
+- For an unavailable currency item, preserve identity and `sold_quantity`, but
+  native monetary outputs must not be presented as safely denominated values.
+- Do not expose a portfolio-level Realized P/L total in v1.
+
+Fees/taxes:
+
+- `Transaction` currently has no fee, commission or tax fields.
+- Realized P/L v1 uses transaction `quantity` and `unit_price` only.
+- Do not invent fee/commission/tax behavior.
+
+Out of scope for this methodology slice:
+
+- RealizedPlService implementation.
+- API/controller/response/dependency wiring.
+- Portfolio-base-currency Realized P/L.
+- Historical transaction-date FX accounting.
+- Portfolio-level Realized P/L total.
+- Period/from-to Realized P/L.
+- Realized P/L percentage/return.
+- Fees, commissions or taxes.
+- New transaction types.
+- Migration, table or schema changes.
 
 ### Unrealized P/L v1
 
