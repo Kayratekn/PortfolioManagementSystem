@@ -11,41 +11,43 @@ from src.model.user import User
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.transaction_repository import TransactionRepository
 from src.services.moving_weighted_average_replay import (
+    MovingWeightedAverageReplayResult,
     replay_moving_weighted_average,
 )
 
 
-COST_BASIS_ITEM_STATUS_COMPLETE = "COMPLETE"
-COST_BASIS_ITEM_STATUS_UNAVAILABLE = "UNAVAILABLE"
-COST_BASIS_PORTFOLIO_STATUS_COMPLETE = "COMPLETE"
-COST_BASIS_PORTFOLIO_STATUS_INCOMPLETE = "INCOMPLETE"
-COST_BASIS_UNAVAILABLE_REASON_ASSET_CURRENCY_UNAVAILABLE = (
+REALIZED_PL_ITEM_STATUS_COMPLETE = "COMPLETE"
+REALIZED_PL_ITEM_STATUS_UNAVAILABLE = "UNAVAILABLE"
+REALIZED_PL_RESULT_STATUS_COMPLETE = "COMPLETE"
+REALIZED_PL_RESULT_STATUS_INCOMPLETE = "INCOMPLETE"
+REALIZED_PL_UNAVAILABLE_REASON_ASSET_CURRENCY_UNAVAILABLE = (
     "ASSET_CURRENCY_UNAVAILABLE"
 )
 
 
 @dataclass(frozen=True)
-class CostBasisItem:
+class RealizedPlItem:
     asset_id: int
     asset_code: str
     asset_name: str
     asset_currency: str | None
     status: str
     unavailable_reason: str | None
-    quantity: Decimal
-    total_cost_basis: Decimal | None
-    average_cost_per_unit: Decimal | None
+    sold_quantity: Decimal
+    realized_proceeds: Decimal | None
+    realized_cost_basis: Decimal | None
+    native_realized_pl: Decimal | None
 
 
 @dataclass(frozen=True)
-class CostBasisResult:
+class RealizedPlResult:
     portfolio_id: int
     as_of_date: date
     status: str
-    items: tuple[CostBasisItem, ...]
+    items: tuple[RealizedPlItem, ...]
 
 
-class CostBasisService:
+class RealizedPlService:
     def __init__(
         self,
         portfolio_repository: PortfolioRepository,
@@ -54,13 +56,13 @@ class CostBasisService:
         self.portfolio_repository = portfolio_repository
         self.transaction_repository = transaction_repository
 
-    def get_cost_basis(
+    def get_realized_pl(
         self,
         *,
         portfolio_id: int,
         current_user: User,
         as_of_date: date,
-    ) -> CostBasisResult:
+    ) -> RealizedPlResult:
         portfolio = self.portfolio_repository.get_by_id_for_user(
             portfolio_id,
             current_user.id,
@@ -71,7 +73,7 @@ class CostBasisService:
                 detail="Portfolio not found.",
             )
 
-        holdings = self.transaction_repository.list_holdings_by_portfolio_on_or_before(
+        assets = self.transaction_repository.list_assets_with_sell_on_or_before(
             portfolio_id=portfolio_id,
             transaction_date=as_of_date,
         )
@@ -79,19 +81,15 @@ class CostBasisService:
             self._build_item(
                 portfolio_id=portfolio_id,
                 asset=asset,
-                holding_quantity=holding_quantity,
                 as_of_date=as_of_date,
             )
-            for asset, holding_quantity in holdings
+            for asset in assets
         )
-        result_status = COST_BASIS_PORTFOLIO_STATUS_COMPLETE
-        if any(
-            item.status == COST_BASIS_ITEM_STATUS_UNAVAILABLE
-            for item in items
-        ):
-            result_status = COST_BASIS_PORTFOLIO_STATUS_INCOMPLETE
+        result_status = REALIZED_PL_RESULT_STATUS_COMPLETE
+        if any(item.status == REALIZED_PL_ITEM_STATUS_UNAVAILABLE for item in items):
+            result_status = REALIZED_PL_RESULT_STATUS_INCOMPLETE
 
-        return CostBasisResult(
+        return RealizedPlResult(
             portfolio_id=portfolio_id,
             as_of_date=as_of_date,
             status=result_status,
@@ -103,24 +101,8 @@ class CostBasisService:
         *,
         portfolio_id: int,
         asset: Asset,
-        holding_quantity: Decimal,
         as_of_date: date,
-    ) -> CostBasisItem:
-        if asset.currency is None or asset.currency.strip() == "":
-            return CostBasisItem(
-                asset_id=asset.id,
-                asset_code=asset.asset_code,
-                asset_name=asset.asset_name,
-                asset_currency=asset.currency,
-                status=COST_BASIS_ITEM_STATUS_UNAVAILABLE,
-                unavailable_reason=(
-                    COST_BASIS_UNAVAILABLE_REASON_ASSET_CURRENCY_UNAVAILABLE
-                ),
-                quantity=holding_quantity,
-                total_cost_basis=None,
-                average_cost_per_unit=None,
-            )
-
+    ) -> RealizedPlItem:
         transactions = (
             self.transaction_repository.list_by_portfolio_and_asset_on_or_before(
                 portfolio_id=portfolio_id,
@@ -128,20 +110,43 @@ class CostBasisService:
                 transaction_date=as_of_date,
             )
         )
-        replay_state = replay_moving_weighted_average(transactions)
-        if replay_state.quantity != holding_quantity:
-            raise ValueError(
-                "Cost basis replay quantity does not match as-of holding quantity."
+        replay_result = replay_moving_weighted_average(transactions)
+        self._validate_replay_result(replay_result)
+
+        if asset.currency is None or asset.currency.strip() == "":
+            return RealizedPlItem(
+                asset_id=asset.id,
+                asset_code=asset.asset_code,
+                asset_name=asset.asset_name,
+                asset_currency=asset.currency,
+                status=REALIZED_PL_ITEM_STATUS_UNAVAILABLE,
+                unavailable_reason=(
+                    REALIZED_PL_UNAVAILABLE_REASON_ASSET_CURRENCY_UNAVAILABLE
+                ),
+                sold_quantity=replay_result.sold_quantity,
+                realized_proceeds=None,
+                realized_cost_basis=None,
+                native_realized_pl=None,
             )
 
-        return CostBasisItem(
+        return RealizedPlItem(
             asset_id=asset.id,
             asset_code=asset.asset_code,
             asset_name=asset.asset_name,
             asset_currency=asset.currency,
-            status=COST_BASIS_ITEM_STATUS_COMPLETE,
+            status=REALIZED_PL_ITEM_STATUS_COMPLETE,
             unavailable_reason=None,
-            quantity=replay_state.quantity,
-            total_cost_basis=replay_state.total_cost,
-            average_cost_per_unit=replay_state.average_cost,
+            sold_quantity=replay_result.sold_quantity,
+            realized_proceeds=replay_result.realized_proceeds,
+            realized_cost_basis=replay_result.realized_cost_basis,
+            native_realized_pl=replay_result.native_realized_pl,
         )
+
+    @staticmethod
+    def _validate_replay_result(
+        replay_result: MovingWeightedAverageReplayResult,
+    ) -> None:
+        if replay_result.sold_quantity <= Decimal("0"):
+            raise ValueError(
+                "Realized P/L replay produced no sold quantity for a SELL asset."
+            )

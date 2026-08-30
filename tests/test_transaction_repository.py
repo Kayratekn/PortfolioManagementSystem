@@ -960,3 +960,97 @@ def test_list_by_portfolio_and_asset_still_includes_future_transactions(
     )
 
     assert result == [earlier, future]
+
+def test_list_assets_with_sell_on_or_before_returns_distinct_assets(db_session: Session) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id, transaction_type="BUY", quantity=Decimal("10.00000000")))
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id, transaction_type="SELL", quantity=Decimal("2.00000000")))
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id, transaction_type="SELL", quantity=Decimal("3.00000000")))
+
+    result = repository.list_assets_with_sell_on_or_before(portfolio_id=portfolio.id, transaction_date=TRANSACTION_DATE)
+
+    assert result == [asset]
+
+
+def test_list_assets_with_sell_on_or_before_excludes_future_sell(db_session: Session) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id, transaction_type="SELL", transaction_date=date(2026, 8, 27)))
+
+    result = repository.list_assets_with_sell_on_or_before(portfolio_id=portfolio.id, transaction_date=TRANSACTION_DATE)
+
+    assert result == []
+
+
+def test_list_assets_with_sell_on_or_before_excludes_buy_only_asset(db_session: Session) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id, transaction_type="BUY"))
+
+    result = repository.list_assets_with_sell_on_or_before(portfolio_id=portfolio.id, transaction_date=TRANSACTION_DATE)
+
+    assert result == []
+
+
+def test_list_assets_with_sell_on_or_before_includes_fully_sold_asset(db_session: Session) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id, transaction_type="BUY", quantity=Decimal("5.00000000")))
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id, transaction_type="SELL", quantity=Decimal("5.00000000")))
+
+    result = repository.list_assets_with_sell_on_or_before(portfolio_id=portfolio.id, transaction_date=TRANSACTION_DATE)
+
+    assert result == [asset]
+
+
+def test_list_assets_with_sell_on_or_before_orders_by_asset_id(db_session: Session) -> None:
+    portfolio, first_asset = _create_transaction_parents(db_session)
+    second_asset = _create_asset(db_session, asset_code="BBL")
+    repository = TransactionRepository(db_session)
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=second_asset.id, transaction_type="SELL"))
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=first_asset.id, transaction_type="SELL"))
+
+    result = repository.list_assets_with_sell_on_or_before(portfolio_id=portfolio.id, transaction_date=TRANSACTION_DATE)
+
+    assert first_asset.id < second_asset.id
+    assert result == [first_asset, second_asset]
+
+
+def test_list_assets_with_sell_on_or_before_isolates_portfolio(
+    db_session: Session,
+) -> None:
+    portfolio, owned_asset = _create_transaction_parents(db_session)
+    other_user = _create_user(
+        db_session,
+        email="sell-assets-other-portfolio@example.com",
+        username="sell-assets-other-portfolio",
+    )
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=other_user.id,
+        name="Sell Assets Other Portfolio",
+    )
+    other_asset = _create_asset(db_session, asset_code="OTH")
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=owned_asset.id,
+            transaction_type="SELL",
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=other_portfolio.id,
+            asset_id=other_asset.id,
+            transaction_type="SELL",
+        )
+    )
+
+    result = repository.list_assets_with_sell_on_or_before(
+        portfolio_id=portfolio.id,
+        transaction_date=TRANSACTION_DATE,
+    )
+
+    assert result == [owned_asset]
