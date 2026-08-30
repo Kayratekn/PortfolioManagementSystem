@@ -21,6 +21,7 @@ from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
 from src.services.portfolio_service import PortfolioService
 from src.services.portfolio_valuation_service import PortfolioValuationService
+from src.services.realized_pl_service import RealizedPlService
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
@@ -132,6 +133,18 @@ def get_cost_basis_service(
         transaction_repository=transaction_repository,
     )
 
+
+def get_realized_pl_service(
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    transaction_repository: Annotated[
+        TransactionRepository,
+        Depends(get_transaction_repository),
+    ],
+) -> RealizedPlService:
+    return RealizedPlService(
+        portfolio_repository=portfolio_repository,
+        transaction_repository=transaction_repository,
+    )
 
 def get_tefas_valuation_price_service(
     daily_data_repository: Annotated[

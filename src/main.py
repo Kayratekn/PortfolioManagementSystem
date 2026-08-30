@@ -16,6 +16,7 @@ from src.controller.health_controller import router as health_router
 from src.controller.holding_controller import router as holding_router
 from src.controller.portfolio_controller import router as portfolio_router
 from src.controller.portfolio_valuation_controller import router as portfolio_valuation_router
+from src.controller.realized_pl_controller import router as realized_pl_router
 from src.controller.transaction_controller import router as transaction_router
 from src.controller.unrealized_pl_controller import router as unrealized_pl_router
 from src.controller.tefas_fund_controller import router as tefas_fund_router
@@ -32,4 +33,5 @@ app.include_router(holding_router)
 app.include_router(portfolio_valuation_router)
 app.include_router(cost_basis_router)
 app.include_router(unrealized_pl_router)
+app.include_router(realized_pl_router)
 app.include_router(tefas_fund_router)
