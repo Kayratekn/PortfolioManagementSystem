@@ -55,6 +55,25 @@ class TransactionRepository:
             transaction_date=transaction_date,
         )
 
+    def list_assets_with_sell_on_or_before(
+        self,
+        *,
+        portfolio_id: int,
+        transaction_date: date,
+    ) -> list[Asset]:
+        statement = (
+            select(Asset)
+            .join(Transaction, Asset.id == Transaction.asset_id)
+            .where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.transaction_type == "SELL",
+                Transaction.transaction_date <= transaction_date,
+            )
+            .distinct()
+            .order_by(Asset.id.asc())
+        )
+        return list(self.db.scalars(statement))
+
     def _list_by_portfolio_and_asset(
         self,
         *,
