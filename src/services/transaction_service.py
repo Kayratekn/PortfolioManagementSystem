@@ -11,6 +11,7 @@ from src.model.user import User
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.transaction_repository import TransactionRepository
+from src.response.transaction_response import TransactionListResponse, TransactionResponse
 
 
 class TransactionService:
@@ -25,6 +26,40 @@ class TransactionService:
         self.portfolio_repository = portfolio_repository
         self.asset_repository = asset_repository
         self.transaction_repository = transaction_repository
+
+    def list_transactions(
+        self,
+        *,
+        portfolio_id: int,
+        current_user: User,
+        skip: int,
+        limit: int,
+    ) -> TransactionListResponse:
+        portfolio = self.portfolio_repository.get_by_id_for_user(
+            portfolio_id,
+            current_user.id,
+        )
+        if portfolio is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Portfolio not found.",
+            )
+
+        transactions = self.transaction_repository.list_by_portfolio(
+            portfolio_id=portfolio_id,
+            skip=skip,
+            limit=limit,
+        )
+        total = self.transaction_repository.count_by_portfolio(portfolio_id=portfolio_id)
+        return TransactionListResponse(
+            items=[
+                TransactionResponse.model_validate(transaction)
+                for transaction in transactions
+            ],
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
 
     def create_transaction(
         self,

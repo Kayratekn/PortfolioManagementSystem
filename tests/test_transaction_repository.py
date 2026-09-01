@@ -1054,3 +1054,83 @@ def test_list_assets_with_sell_on_or_before_isolates_portfolio(
     )
 
     assert result == [owned_asset]
+
+
+def test_list_by_portfolio_returns_ordered_paginated_transactions(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    other_user = _create_user(
+        db_session,
+        email="history-other-transaction-repository@example.com",
+        username="history-other-transaction-repository",
+    )
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=other_user.id,
+        name="History Other Portfolio",
+    )
+    repository = TransactionRepository(db_session)
+    later = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 26),
+        )
+    )
+    first_same_date = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 25),
+        )
+    )
+    second_same_date = repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 25),
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=other_portfolio.id,
+            asset_id=asset.id,
+            transaction_date=date(2026, 8, 24),
+        )
+    )
+
+    result = repository.list_by_portfolio(
+        portfolio_id=portfolio.id,
+        skip=1,
+        limit=2,
+    )
+
+    assert first_same_date.id < second_same_date.id
+    assert result == [second_same_date, later]
+
+
+def test_count_by_portfolio_counts_only_requested_portfolio(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    other_user = _create_user(
+        db_session,
+        email="count-other-transaction-repository@example.com",
+        username="count-other-transaction-repository",
+    )
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=other_user.id,
+        name="Count Other Portfolio",
+    )
+    repository = TransactionRepository(db_session)
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id))
+    repository.add(_build_transaction(portfolio_id=portfolio.id, asset_id=asset.id))
+    repository.add(
+        _build_transaction(portfolio_id=other_portfolio.id, asset_id=asset.id)
+    )
+
+    result = repository.count_by_portfolio(portfolio_id=portfolio.id)
+
+    assert result == 2

@@ -501,3 +501,128 @@ def test_non_positive_transaction_amount_fields_return_422(
         select(Transaction).where(Transaction.portfolio_id == portfolio_id)
     )
     assert persisted_transaction is None
+
+
+def test_authenticated_user_can_list_transactions(client, db_session: Session) -> None:
+    register_user(
+        client,
+        email="transaction-list-api@example.com",
+        username="transaction-list-api",
+    )
+    token = login_user(client, email="transaction-list-api@example.com")
+    portfolio_response = create_portfolio(client, token, name="List Transactions")
+    assert portfolio_response.status_code == 201
+    portfolio_id = portfolio_response.json()["id"]
+    asset = create_tefas_asset(db_session)
+    created_ids: list[int] = []
+    for transaction_date in ["2026-08-26", "2026-08-25", "2026-08-25"]:
+        response = client.post(
+            f"/api/v1/portfolios/{portfolio_id}/transactions",
+            json={
+                "asset_id": asset.id,
+                "transaction_type": "BUY",
+                "quantity": "1.23456789",
+                "unit_price": "2.34567890",
+                "transaction_date": transaction_date,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 201
+        created_ids.append(response.json()["id"])
+
+    response = client.get(
+        f"/api/v1/portfolios/{portfolio_id}/transactions?skip=1&limit=2",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    assert body["skip"] == 1
+    assert body["limit"] == 2
+    assert [item["id"] for item in body["items"]] == [created_ids[2], created_ids[0]]
+    assert body["items"][0]["quantity"] == "1.23456789"
+    assert body["items"][0]["unit_price"] == "2.34567890"
+
+
+def test_list_transactions_empty_history_returns_empty_items(
+    client,
+) -> None:
+    register_user(
+        client,
+        email="transaction-list-empty@example.com",
+        username="transaction-list-empty",
+    )
+    token = login_user(client, email="transaction-list-empty@example.com")
+    portfolio_response = create_portfolio(client, token, name="Empty Transactions")
+    assert portfolio_response.status_code == 201
+    portfolio_id = portfolio_response.json()["id"]
+
+    response = client.get(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "skip": 0, "limit": 50}
+
+
+def test_list_transactions_requires_authentication(client) -> None:
+    response = client.get("/api/v1/portfolios/999999/transactions")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == (
+        "Authentication credentials were not provided or are invalid."
+    )
+
+
+def test_user_cannot_list_transactions_for_another_users_portfolio(
+    client,
+) -> None:
+    register_user(
+        client,
+        email="transaction-list-owner@example.com",
+        username="transaction-list-owner",
+    )
+    owner_token = login_user(client, email="transaction-list-owner@example.com")
+    portfolio_response = create_portfolio(client, owner_token, name="Owner List")
+    assert portfolio_response.status_code == 201
+    portfolio_id = portfolio_response.json()["id"]
+
+    register_user(
+        client,
+        email="transaction-list-other@example.com",
+        username="transaction-list-other",
+    )
+    other_token = login_user(client, email="transaction-list-other@example.com")
+
+    response = client.get(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Portfolio not found."
+
+
+@pytest.mark.parametrize("query", ["skip=-1", "limit=0", "limit=101"])
+def test_list_transactions_validates_pagination_query(
+    client,
+    query: str,
+) -> None:
+    register_user(
+        client,
+        email=f"transaction-list-{query.replace('=', '-')}@example.com",
+        username=f"transaction-list-{query.replace('=', '-')}",
+    )
+    token = login_user(
+        client,
+        email=f"transaction-list-{query.replace('=', '-')}@example.com",
+    )
+
+    response = client.get(
+        f"/api/v1/portfolios/999999/transactions?{query}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422

@@ -19,6 +19,28 @@ class TransactionRepository:
         self.db.flush()
         return transaction
 
+    def list_by_portfolio(
+        self,
+        *,
+        portfolio_id: int,
+        skip: int,
+        limit: int,
+    ) -> list[Transaction]:
+        statement = (
+            select(Transaction)
+            .where(Transaction.portfolio_id == portfolio_id)
+            .order_by(Transaction.transaction_date.asc(), Transaction.id.asc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(self.db.scalars(statement))
+
+    def count_by_portfolio(self, *, portfolio_id: int) -> int:
+        statement = select(func.count(Transaction.id)).where(
+            Transaction.portfolio_id == portfolio_id,
+        )
+        return int(self.db.scalar(statement) or 0)
+
     def get_net_quantity(self, *, portfolio_id: int, asset_id: int) -> Decimal:
         quantity_delta = case(
             (Transaction.transaction_type == "BUY", Transaction.quantity),
