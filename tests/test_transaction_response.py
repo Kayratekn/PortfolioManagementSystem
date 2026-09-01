@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from src.model.transaction import Transaction
-from src.response.transaction_response import TransactionResponse
+from src.response.transaction_response import TransactionListResponse, TransactionResponse
 
 
 CREATED_AT = datetime(2026, 8, 25, 9, 30, tzinfo=timezone.utc)
@@ -64,3 +64,24 @@ def test_transaction_response_json_serializes_decimal_values_as_strings() -> Non
 
     assert body["quantity"] == "1.23456789"
     assert body["unit_price"] == "98.76543210"
+
+
+def test_transaction_list_response_preserves_pagination_metadata() -> None:
+    item = TransactionResponse.model_validate(_build_transaction())
+
+    response = TransactionListResponse(items=[item], total=3, skip=1, limit=1)
+
+    assert response.items == [item]
+    assert response.total == 3
+    assert response.skip == 1
+    assert response.limit == 1
+
+
+def test_transaction_list_response_json_serializes_decimal_values_as_strings() -> None:
+    item = TransactionResponse.model_validate(_build_transaction())
+    response = TransactionListResponse(items=[item], total=1, skip=0, limit=50)
+
+    body = json.loads(response.model_dump_json())
+
+    assert body["items"][0]["quantity"] == "1.23456789"
+    assert body["items"][0]["unit_price"] == "98.76543210"

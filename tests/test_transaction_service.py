@@ -398,3 +398,80 @@ def test_sell_uses_locking_portfolio_lookup(db_session: Session) -> None:
 
     assert portfolio_repository.normal_lookup_calls == 0
     assert portfolio_repository.locking_lookup_calls == 1
+
+
+def test_list_transactions_returns_owned_portfolio_history(db_session: Session) -> None:
+    user, portfolio, asset = _create_parents(db_session)
+    service = _create_service(db_session)
+    first = _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_date=date(2026, 8, 24),
+    )
+    second = _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_date=date(2026, 8, 25),
+    )
+
+    result = service.list_transactions(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        skip=1,
+        limit=1,
+    )
+
+    assert result.total == 2
+    assert result.skip == 1
+    assert result.limit == 1
+    assert [item.id for item in result.items] == [second.id]
+    assert result.items[0].quantity == first.quantity
+
+
+def test_list_transactions_returns_empty_history(db_session: Session) -> None:
+    user, portfolio, _asset = _create_parents(db_session)
+    service = _create_service(db_session)
+
+    result = service.list_transactions(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        skip=0,
+        limit=50,
+    )
+
+    assert result.items == []
+    assert result.total == 0
+    assert result.skip == 0
+    assert result.limit == 50
+
+
+def test_list_transactions_for_non_owned_portfolio_returns_404(
+    db_session: Session,
+) -> None:
+    owner = _create_user(
+        db_session,
+        email="list-owner@example.com",
+        username="list-owner",
+    )
+    other_user = _create_user(
+        db_session,
+        email="list-other@example.com",
+        username="list-other",
+    )
+    portfolio = _create_portfolio(db_session, user_id=owner.id, name="Owner Portfolio")
+    service = _create_service(db_session)
+
+    with pytest.raises(HTTPException) as exc_info:
+        service.list_transactions(
+            portfolio_id=portfolio.id,
+            current_user=other_user,
+            skip=0,
+            limit=50,
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Portfolio not found."

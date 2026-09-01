@@ -18,3 +18,10 @@ class TransactionResponse(BaseModel):
     transaction_date: date
     created_at: datetime
     updated_at: datetime
+
+
+class TransactionListResponse(BaseModel):
+    items: list[TransactionResponse]
+    total: int
+    skip: int
+    limit: int
