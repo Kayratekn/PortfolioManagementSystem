@@ -10,6 +10,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config.settings import get_settings
+from src.controller.asset_controller import router as asset_router
 from src.controller.auth_controller import router as auth_router
 from src.controller.cost_basis_controller import router as cost_basis_router
 from src.controller.health_controller import router as health_router
@@ -27,6 +28,7 @@ settings = get_settings()
 app = FastAPI(title=settings.app_name)
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(asset_router)
 app.include_router(portfolio_router)
 app.include_router(transaction_router)
 app.include_router(holding_router)
