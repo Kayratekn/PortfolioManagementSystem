@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from src.model.asset import Asset
@@ -36,6 +36,28 @@ class AssetRepository:
             .order_by(Asset.asset_code.asc())
         )
         return list(self.db.scalars(statement))
+
+    def list_active_catalog(
+        self,
+        *,
+        skip: int,
+        limit: int,
+        search: str | None = None,
+    ) -> list[Asset]:
+        statement = (
+            select(Asset)
+            .where(*self._active_catalog_filters(search))
+            .order_by(Asset.asset_code.asc(), Asset.id.asc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(self.db.scalars(statement))
+
+    def count_active_catalog(self, *, search: str | None = None) -> int:
+        statement = select(func.count(Asset.id)).where(
+            *self._active_catalog_filters(search)
+        )
+        return int(self.db.scalar(statement) or 0)
 
     def list_active_tefas_assets(self, *, limit: int) -> list[Asset]:
         if limit <= 0:
@@ -98,3 +120,15 @@ class AssetRepository:
         self.db.add(asset)
         self.db.flush()
         return asset
+
+    def _active_catalog_filters(self, search: str | None) -> list[object]:
+        filters: list[object] = [Asset.is_active.is_(True)]
+        if search:
+            search_pattern = f"%{search}%"
+            filters.append(
+                or_(
+                    Asset.asset_code.ilike(search_pattern),
+                    Asset.asset_name.ilike(search_pattern),
+                )
+            )
+        return filters
