@@ -100,6 +100,7 @@ def add_transaction(
     transaction_type: str = "BUY",
     quantity: Decimal = Decimal("10.00000000"),
     unit_price: Decimal = Decimal("1.00000000"),
+    transaction_currency: str | None = None,
     transaction_date: date = date(2026, 8, 20),
 ) -> Transaction:
     transaction = Transaction(
@@ -108,6 +109,7 @@ def add_transaction(
         transaction_type=transaction_type,
         quantity=quantity,
         unit_price=unit_price,
+        transaction_currency=transaction_currency,
         transaction_date=transaction_date,
     )
     db_session.add(transaction)
@@ -527,7 +529,12 @@ def test_missing_asset_currency_is_incomplete_and_preserves_price_provenance(
         username="valuation-missing-currency",
     )
     asset = create_tefas_asset(db_session, asset_code="VAH", currency=None)
-    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=asset.id)
+    add_transaction(
+        db_session,
+        portfolio_id=portfolio_id,
+        asset_id=asset.id,
+        transaction_currency="TRY",
+    )
     add_daily_data(db_session, asset_id=asset.id, price=Decimal("5.00000000"))
 
     response = client.get(

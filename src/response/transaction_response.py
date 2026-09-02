@@ -15,6 +15,7 @@ class TransactionResponse(BaseModel):
     transaction_type: str
     quantity: Decimal
     unit_price: Decimal
+    transaction_currency: str | None
     transaction_date: date
     created_at: datetime
     updated_at: datetime

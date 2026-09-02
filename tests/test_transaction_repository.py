@@ -97,6 +97,7 @@ def _build_transaction(
     quantity: Decimal = Decimal("12.50000000"),
     unit_price: Decimal = Decimal("34.12345678"),
     transaction_date: date = TRANSACTION_DATE,
+    transaction_currency: str | None = None,
 ) -> Transaction:
     return Transaction(
         portfolio_id=portfolio_id,
@@ -104,6 +105,7 @@ def _build_transaction(
         transaction_type=transaction_type,
         quantity=quantity,
         unit_price=unit_price,
+        transaction_currency=transaction_currency,
         transaction_date=transaction_date,
     )
 
@@ -1134,3 +1136,105 @@ def test_count_by_portfolio_counts_only_requested_portfolio(
     result = repository.count_by_portfolio(portfolio_id=portfolio.id)
 
     assert result == 2
+
+
+def test_list_existing_non_null_currencies_ignores_legacy_null_rows(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_currency=None,
+        )
+    )
+
+    result = repository.list_existing_non_null_currencies(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+    )
+
+    assert result == []
+
+
+def test_list_existing_non_null_currencies_returns_distinct_ordered_values(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_currency="USD",
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_currency="TRY",
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_currency="USD",
+        )
+    )
+
+    result = repository.list_existing_non_null_currencies(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+    )
+
+    assert result == ["TRY", "USD"]
+
+
+def test_list_existing_non_null_currencies_isolates_portfolio_and_asset(
+    db_session: Session,
+) -> None:
+    portfolio, asset = _create_transaction_parents(db_session)
+    other_user = _create_user(
+        db_session,
+        email="currency-other-transaction-repository@example.com",
+        username="currency-other-transaction-repository",
+    )
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=other_user.id,
+        name="Currency Other Portfolio",
+    )
+    other_asset = _create_asset(db_session, asset_code="CUR")
+    repository = TransactionRepository(db_session)
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_currency="TRY",
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=other_portfolio.id,
+            asset_id=asset.id,
+            transaction_currency="USD",
+        )
+    )
+    repository.add(
+        _build_transaction(
+            portfolio_id=portfolio.id,
+            asset_id=other_asset.id,
+            transaction_currency="EUR",
+        )
+    )
+
+    result = repository.list_existing_non_null_currencies(
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+    )
+
+    assert result == ["TRY"]

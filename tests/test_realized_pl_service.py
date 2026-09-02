@@ -76,6 +76,7 @@ def _add_tx(
     transaction_type: str = "BUY",
     quantity: str = "10.00000000",
     unit_price: str = "20.00000000",
+    transaction_currency: str | None = None,
     transaction_date: date = AS_OF_DATE,
 ) -> Transaction:
     tx = Transaction(
@@ -84,6 +85,7 @@ def _add_tx(
         transaction_type=transaction_type,
         quantity=Decimal(quantity),
         unit_price=Decimal(unit_price),
+        transaction_currency=transaction_currency,
         transaction_date=transaction_date,
     )
     db_session.add(tx)
@@ -267,7 +269,19 @@ def test_multiple_assets_independent_fully_sold_included_buy_only_omitted(db_ses
 
 @pytest.mark.parametrize("currency", [None, "   "])
 def test_missing_or_blank_currency_unavailable_keeps_quantity_hides_money(db_session: Session, currency: str | None) -> None:
-    result, item, _asset = _run_single(db_session, [{}, {"transaction_type": "SELL", "quantity": "4.00000000", "unit_price": "30.00000000"}], currency=currency)
+    result, item, _asset = _run_single(
+        db_session,
+        [
+            {"transaction_currency": "TRY"},
+            {
+                "transaction_type": "SELL",
+                "quantity": "4.00000000",
+                "unit_price": "30.00000000",
+                "transaction_currency": "TRY",
+            },
+        ],
+        currency=currency,
+    )
 
     assert result.status == REALIZED_PL_RESULT_STATUS_INCOMPLETE
     assert item.status == REALIZED_PL_ITEM_STATUS_UNAVAILABLE

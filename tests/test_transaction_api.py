@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -84,6 +85,7 @@ def test_authenticated_user_can_create_buy_transaction(client, db_session: Sessi
             "transaction_type": "BUY",
             "quantity": "10.50000000",
             "unit_price": "25.12345678",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -96,6 +98,7 @@ def test_authenticated_user_can_create_buy_transaction(client, db_session: Sessi
     assert body["transaction_type"] == "BUY"
     assert body["quantity"] == "10.50000000"
     assert body["unit_price"] == "25.12345678"
+    assert body["transaction_currency"] == "TRY"
     assert body["transaction_date"] == "2026-08-25"
     assert body["id"] is not None
     assert body["created_at"] is not None
@@ -112,6 +115,7 @@ def test_authenticated_user_can_create_buy_transaction(client, db_session: Sessi
     assert persisted_transaction.transaction_type == "BUY"
     assert persisted_transaction.quantity == Decimal("10.50000000")
     assert persisted_transaction.unit_price == Decimal("25.12345678")
+    assert persisted_transaction.transaction_currency == "TRY"
 
 def test_user_cannot_create_transaction_for_another_users_portfolio(
     client,
@@ -142,6 +146,7 @@ def test_user_cannot_create_transaction_for_another_users_portfolio(
             "transaction_type": "BUY",
             "quantity": "10.50000000",
             "unit_price": "25.12345678",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
         headers={"Authorization": f"Bearer {other_token}"},
@@ -179,6 +184,7 @@ def test_transaction_with_missing_asset_returns_404(
             "transaction_type": "BUY",
             "quantity": "10.50000000",
             "unit_price": "25.12345678",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -215,6 +221,7 @@ def test_authenticated_user_can_create_valid_sell_transaction(
             "transaction_type": "BUY",
             "quantity": "10.00000000",
             "unit_price": "20.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-20",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -228,6 +235,7 @@ def test_authenticated_user_can_create_valid_sell_transaction(
             "transaction_type": "SELL",
             "quantity": "4.00000000",
             "unit_price": "25.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -240,6 +248,7 @@ def test_authenticated_user_can_create_valid_sell_transaction(
     assert body["asset_id"] == asset.id
     assert body["quantity"] == "4.00000000"
     assert body["unit_price"] == "25.00000000"
+    assert body["transaction_currency"] == "TRY"
     assert body["transaction_date"] == "2026-08-25"
 
     db_session.expire_all()
@@ -278,6 +287,7 @@ def test_sell_greater_than_available_quantity_returns_422(
             "transaction_type": "BUY",
             "quantity": "10.00000000",
             "unit_price": "20.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-20",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -292,6 +302,7 @@ def test_sell_greater_than_available_quantity_returns_422(
             "transaction_type": "SELL",
             "quantity": "11.00000000",
             "unit_price": "25.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -339,6 +350,7 @@ def test_backdated_sell_that_makes_later_balance_negative_returns_422(
             "transaction_type": "BUY",
             "quantity": "10.00000000",
             "unit_price": "20.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-20",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -353,6 +365,7 @@ def test_backdated_sell_that_makes_later_balance_negative_returns_422(
             "transaction_type": "SELL",
             "quantity": "10.00000000",
             "unit_price": "25.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-30",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -367,6 +380,7 @@ def test_backdated_sell_that_makes_later_balance_negative_returns_422(
             "transaction_type": "SELL",
             "quantity": "5.00000000",
             "unit_price": "25.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -406,6 +420,7 @@ def test_create_transaction_requires_authentication(
             "transaction_type": "BUY",
             "quantity": "10.00000000",
             "unit_price": "20.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
     )
@@ -441,6 +456,7 @@ def test_invalid_transaction_type_returns_422(
             "transaction_type": "HOLD",
             "quantity": "10.00000000",
             "unit_price": "20.00000000",
+            "transaction_currency": "TRY",
             "transaction_date": "2026-08-25",
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -485,6 +501,7 @@ def test_non_positive_transaction_amount_fields_return_422(
         "transaction_type": "BUY",
         "quantity": "10.00000000",
         "unit_price": "20.00000000",
+        "transaction_currency": "TRY",
         "transaction_date": "2026-08-25",
     }
     payload[field_name] = field_value
@@ -523,6 +540,7 @@ def test_authenticated_user_can_list_transactions(client, db_session: Session) -
                 "transaction_type": "BUY",
                 "quantity": "1.23456789",
                 "unit_price": "2.34567890",
+                "transaction_currency": "TRY",
                 "transaction_date": transaction_date,
             },
             headers={"Authorization": f"Bearer {token}"},
@@ -543,6 +561,7 @@ def test_authenticated_user_can_list_transactions(client, db_session: Session) -
     assert [item["id"] for item in body["items"]] == [created_ids[2], created_ids[0]]
     assert body["items"][0]["quantity"] == "1.23456789"
     assert body["items"][0]["unit_price"] == "2.34567890"
+    assert body["items"][0]["transaction_currency"] == "TRY"
 
 
 def test_list_transactions_empty_history_returns_empty_items(
@@ -626,3 +645,147 @@ def test_list_transactions_validates_pagination_query(
     )
 
     assert response.status_code == 422
+
+
+def test_invalid_transaction_currency_returns_422(
+    client,
+    db_session: Session,
+) -> None:
+    register_user(
+        client,
+        email="transaction-invalid-currency@example.com",
+        username="transaction-invalid-currency",
+    )
+    token = login_user(client, email="transaction-invalid-currency@example.com")
+    portfolio_response = create_portfolio(client, token, name="Invalid Currency")
+    assert portfolio_response.status_code == 201
+    portfolio_id = portfolio_response.json()["id"]
+    asset = create_tefas_asset(db_session)
+
+    response = client.post(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        json={
+            "asset_id": asset.id,
+            "transaction_type": "BUY",
+            "quantity": "10.00000000",
+            "unit_price": "20.00000000",
+            "transaction_currency": "JPY",
+            "transaction_date": "2026-08-25",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_missing_transaction_currency_returns_422(
+    client,
+    db_session: Session,
+) -> None:
+    register_user(
+        client,
+        email="transaction-missing-currency@example.com",
+        username="transaction-missing-currency",
+    )
+    token = login_user(client, email="transaction-missing-currency@example.com")
+    portfolio_response = create_portfolio(client, token, name="Missing Currency")
+    assert portfolio_response.status_code == 201
+    portfolio_id = portfolio_response.json()["id"]
+    asset = create_tefas_asset(db_session)
+
+    response = client.post(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        json={
+            "asset_id": asset.id,
+            "transaction_type": "BUY",
+            "quantity": "10.00000000",
+            "unit_price": "20.00000000",
+            "transaction_date": "2026-08-25",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_same_portfolio_asset_different_transaction_currency_returns_422(
+    client,
+    db_session: Session,
+) -> None:
+    register_user(
+        client,
+        email="transaction-currency-mismatch@example.com",
+        username="transaction-currency-mismatch",
+    )
+    token = login_user(client, email="transaction-currency-mismatch@example.com")
+    portfolio_response = create_portfolio(client, token, name="Currency Mismatch")
+    assert portfolio_response.status_code == 201
+    portfolio_id = portfolio_response.json()["id"]
+    asset = create_tefas_asset(db_session)
+
+    first_response = client.post(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        json={
+            "asset_id": asset.id,
+            "transaction_type": "BUY",
+            "quantity": "10.00000000",
+            "unit_price": "20.00000000",
+            "transaction_currency": "TRY",
+            "transaction_date": "2026-08-25",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert first_response.status_code == 201
+
+    response = client.post(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        json={
+            "asset_id": asset.id,
+            "transaction_type": "BUY",
+            "quantity": "1.00000000",
+            "unit_price": "20.00000000",
+            "transaction_currency": "USD",
+            "transaction_date": "2026-08-26",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Transaction currency must match existing transactions for this portfolio and asset."
+    )
+
+
+def test_legacy_null_transaction_currency_remains_readable(
+    client,
+    db_session: Session,
+) -> None:
+    register_user(
+        client,
+        email="transaction-legacy-null@example.com",
+        username="transaction-legacy-null",
+    )
+    token = login_user(client, email="transaction-legacy-null@example.com")
+    portfolio_response = create_portfolio(client, token, name="Legacy Currency")
+    assert portfolio_response.status_code == 201
+    portfolio_id = portfolio_response.json()["id"]
+    asset = create_tefas_asset(db_session)
+    legacy_transaction = Transaction(
+        portfolio_id=portfolio_id,
+        asset_id=asset.id,
+        transaction_type="BUY",
+        quantity=Decimal("1.00000000"),
+        unit_price=Decimal("2.00000000"),
+        transaction_currency=None,
+        transaction_date=date(2026, 8, 25),
+    )
+    db_session.add(legacy_transaction)
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/portfolios/{portfolio_id}/transactions",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["transaction_currency"] is None

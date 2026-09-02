@@ -14,6 +14,7 @@ VALID_PAYLOAD = {
     "transaction_type": "BUY",
     "quantity": Decimal("1.00000000"),
     "unit_price": Decimal("10.00000000"),
+    "transaction_currency": "TRY",
     "transaction_date": date(2026, 8, 25),
 }
 
@@ -31,6 +32,7 @@ def test_valid_buy_payload() -> None:
     assert request.transaction_type == "BUY"
     assert request.quantity == Decimal("1.00000000")
     assert request.unit_price == Decimal("10.00000000")
+    assert request.transaction_currency == "TRY"
     assert request.transaction_date == date(2026, 8, 25)
 
 
@@ -48,6 +50,26 @@ def test_lowercase_whitespace_transaction_type_normalizes(
     request = _build_request(transaction_type=raw_transaction_type)
 
     assert request.transaction_type == expected_transaction_type
+
+def test_lowercase_whitespace_transaction_currency_normalizes() -> None:
+    request = _build_request(transaction_currency=" usd ")
+
+    assert request.transaction_currency == "USD"
+
+
+def test_invalid_transaction_currency_is_rejected() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        _build_request(transaction_currency="JPY")
+
+    assert "Transaction currency must be one of TRY, USD, EUR or GBP." in str(exc_info.value)
+
+
+def test_missing_transaction_currency_is_rejected() -> None:
+    payload = VALID_PAYLOAD.copy()
+    payload.pop("transaction_currency")
+
+    with pytest.raises(ValidationError):
+        TransactionCreateRequest(**payload)
 
 
 def test_invalid_transaction_type_is_rejected() -> None:

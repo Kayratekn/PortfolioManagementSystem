@@ -14,6 +14,11 @@ from src.repositories.transaction_repository import TransactionRepository
 from src.response.transaction_response import TransactionListResponse, TransactionResponse
 
 
+TRANSACTION_CURRENCY_MISMATCH_DETAIL = (
+    "Transaction currency must match existing transactions for this portfolio and asset."
+)
+
+
 class TransactionService:
     def __init__(
         self,
@@ -69,19 +74,14 @@ class TransactionService:
         transaction_type: str,
         quantity: Decimal,
         unit_price: Decimal,
+        transaction_currency: str,
         transaction_date: date,
         current_user: User,
     ) -> Transaction:
-        if transaction_type == "SELL":
-            portfolio = self.portfolio_repository.get_by_id_for_user_for_update(
-                portfolio_id,
-                current_user.id,
-            )
-        else:
-            portfolio = self.portfolio_repository.get_by_id_for_user(
-                portfolio_id,
-                current_user.id,
-            )
+        portfolio = self.portfolio_repository.get_by_id_for_user_for_update(
+            portfolio_id,
+            current_user.id,
+        )
         if portfolio is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -95,12 +95,19 @@ class TransactionService:
                 detail="Asset not found.",
             )
 
+        self._validate_transaction_currency_consistency(
+            portfolio_id=portfolio_id,
+            asset_id=asset_id,
+            transaction_currency=transaction_currency,
+        )
+
         transaction = Transaction(
             portfolio_id=portfolio_id,
             asset_id=asset_id,
             transaction_type=transaction_type,
             quantity=quantity,
             unit_price=unit_price,
+            transaction_currency=transaction_currency,
             transaction_date=transaction_date,
         )
 
@@ -115,6 +122,23 @@ class TransactionService:
             raise
 
         return created_transaction
+
+    def _validate_transaction_currency_consistency(
+        self,
+        *,
+        portfolio_id: int,
+        asset_id: int,
+        transaction_currency: str,
+    ) -> None:
+        existing_currencies = self.transaction_repository.list_existing_non_null_currencies(
+            portfolio_id=portfolio_id,
+            asset_id=asset_id,
+        )
+        if any(currency != transaction_currency for currency in existing_currencies):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=TRANSACTION_CURRENCY_MISMATCH_DETAIL,
+            )
 
     def _validate_sell_quantity(self, new_transaction: Transaction) -> None:
         history = self.transaction_repository.list_by_portfolio_and_asset(
