@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -36,3 +38,19 @@ class PortfolioCashFlowRepository:
             PortfolioCashFlow.portfolio_id == portfolio_id,
         )
         return int(self.db.scalar(statement) or 0)
+
+    def list_by_portfolio_on_or_before(
+        self,
+        *,
+        portfolio_id: int,
+        flow_date: date,
+    ) -> list[PortfolioCashFlow]:
+        statement = (
+            select(PortfolioCashFlow)
+            .where(
+                PortfolioCashFlow.portfolio_id == portfolio_id,
+                PortfolioCashFlow.flow_date <= flow_date,
+            )
+            .order_by(PortfolioCashFlow.flow_date.asc(), PortfolioCashFlow.id.asc())
+        )
+        return list(self.db.scalars(statement))

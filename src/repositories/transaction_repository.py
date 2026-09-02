@@ -59,6 +59,22 @@ class TransactionRepository:
         )
         return list(self.db.scalars(statement))
 
+    def list_by_portfolio_on_or_before(
+        self,
+        *,
+        portfolio_id: int,
+        transaction_date: date,
+    ) -> list[Transaction]:
+        statement = (
+            select(Transaction)
+            .where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.transaction_date <= transaction_date,
+            )
+            .order_by(Transaction.transaction_date.asc(), Transaction.id.asc())
+        )
+        return list(self.db.scalars(statement))
+
     def get_net_quantity(self, *, portfolio_id: int, asset_id: int) -> Decimal:
         quantity_delta = case(
             (Transaction.transaction_type == "BUY", Transaction.quantity),
