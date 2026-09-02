@@ -71,6 +71,7 @@ def create_transaction(
     transaction_type: str,
     quantity: str,
     unit_price: str = "20.00000000",
+    transaction_currency: str = "TRY",
     transaction_date: str = "2026-08-25",
 ):
     return client.post(
@@ -80,6 +81,7 @@ def create_transaction(
             "transaction_type": transaction_type,
             "quantity": quantity,
             "unit_price": unit_price,
+            "transaction_currency": transaction_currency,
             "transaction_date": transaction_date,
         },
         headers={"Authorization": f"Bearer {token}"},

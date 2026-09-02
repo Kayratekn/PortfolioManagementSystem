@@ -24,6 +24,10 @@ class Transaction(TimestampMixin, Base):
             "unit_price > 0",
             name="ck_transactions_unit_price_positive",
         ),
+        CheckConstraint(
+            "transaction_currency IS NULL OR transaction_currency IN ('TRY', 'USD', 'EUR', 'GBP')",
+            name="ck_transactions_transaction_currency_allowed",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -32,4 +36,5 @@ class Transaction(TimestampMixin, Base):
     transaction_type: Mapped[str] = mapped_column(String(10), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    transaction_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     transaction_date: Mapped[date] = mapped_column(Date, nullable=False)

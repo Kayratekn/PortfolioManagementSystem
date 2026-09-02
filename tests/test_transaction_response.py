@@ -20,6 +20,7 @@ def _build_transaction() -> Transaction:
         transaction_type="BUY",
         quantity=Decimal("1.23456789"),
         unit_price=Decimal("98.76543210"),
+        transaction_currency="TRY",
         transaction_date=date(2026, 8, 25),
         created_at=CREATED_AT,
         updated_at=UPDATED_AT,
@@ -45,6 +46,7 @@ def test_transaction_response_preserves_all_fields() -> None:
     assert response.transaction_type == "BUY"
     assert response.quantity == Decimal("1.23456789")
     assert response.unit_price == Decimal("98.76543210")
+    assert response.transaction_currency == "TRY"
     assert response.transaction_date == date(2026, 8, 25)
     assert response.created_at == CREATED_AT
     assert response.updated_at == UPDATED_AT
@@ -64,6 +66,7 @@ def test_transaction_response_json_serializes_decimal_values_as_strings() -> Non
 
     assert body["quantity"] == "1.23456789"
     assert body["unit_price"] == "98.76543210"
+    assert body["transaction_currency"] == "TRY"
 
 
 def test_transaction_list_response_preserves_pagination_metadata() -> None:
@@ -85,3 +88,4 @@ def test_transaction_list_response_json_serializes_decimal_values_as_strings() -
 
     assert body["items"][0]["quantity"] == "1.23456789"
     assert body["items"][0]["unit_price"] == "98.76543210"
+    assert body["items"][0]["transaction_currency"] == "TRY"

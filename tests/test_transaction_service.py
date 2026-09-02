@@ -15,7 +15,10 @@ from src.model.user import User
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.transaction_repository import TransactionRepository
-from src.services.transaction_service import TransactionService
+from src.services.transaction_service import (
+    TRANSACTION_CURRENCY_MISMATCH_DETAIL,
+    TransactionService,
+)
 
 
 TRANSACTION_DATE = date(2026, 8, 25)
@@ -124,6 +127,7 @@ def _create_transaction(
     transaction_type: str = "BUY",
     quantity: Decimal = Decimal("5.00000000"),
     unit_price: Decimal = Decimal("10.00000000"),
+    transaction_currency: str = "TRY",
     transaction_date: date = TRANSACTION_DATE,
 ) -> Transaction:
     return service.create_transaction(
@@ -132,6 +136,7 @@ def _create_transaction(
         transaction_type=transaction_type,
         quantity=quantity,
         unit_price=unit_price,
+        transaction_currency=transaction_currency,
         transaction_date=transaction_date,
         current_user=current_user,
     )
@@ -161,6 +166,7 @@ def test_valid_buy_succeeds(db_session: Session) -> None:
     assert result.transaction_type == "BUY"
     assert result.quantity == Decimal("2.50000000")
     assert result.unit_price == Decimal("12.34567890")
+    assert result.transaction_currency == "TRY"
 
 
 def test_portfolio_not_owned_returns_404_and_writes_nothing(db_session: Session) -> None:
@@ -351,7 +357,7 @@ def test_persistence_failure_rolls_back_and_leaves_no_new_transaction_row(
     assert rollback_calls == 1
     assert _count_transactions(db_session) == 0
 
-def test_buy_uses_normal_non_locking_portfolio_lookup(db_session: Session) -> None:
+def test_buy_uses_locking_portfolio_lookup(db_session: Session) -> None:
     user, portfolio, asset = _create_parents(db_session)
     portfolio_repository = TrackingPortfolioRepository(db_session)
     service = _create_service(
@@ -367,8 +373,8 @@ def test_buy_uses_normal_non_locking_portfolio_lookup(db_session: Session) -> No
         transaction_type="BUY",
     )
 
-    assert portfolio_repository.normal_lookup_calls == 1
-    assert portfolio_repository.locking_lookup_calls == 0
+    assert portfolio_repository.normal_lookup_calls == 0
+    assert portfolio_repository.locking_lookup_calls == 1
 
 
 def test_sell_uses_locking_portfolio_lookup(db_session: Session) -> None:
@@ -475,3 +481,128 @@ def test_list_transactions_for_non_owned_portfolio_returns_404(
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == "Portfolio not found."
+
+
+def test_same_portfolio_asset_same_currency_is_accepted(db_session: Session) -> None:
+    user, portfolio, asset = _create_parents(db_session)
+    service = _create_service(db_session)
+    _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_currency="USD",
+    )
+
+    result = _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_currency="USD",
+    )
+
+    assert result.transaction_currency == "USD"
+
+
+def test_same_portfolio_asset_different_non_null_currency_returns_422(
+    db_session: Session,
+) -> None:
+    user, portfolio, asset = _create_parents(db_session)
+    service = _create_service(db_session)
+    _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_currency="TRY",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        _create_transaction(
+            service,
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            current_user=user,
+            transaction_currency="USD",
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail == TRANSACTION_CURRENCY_MISMATCH_DETAIL
+
+
+def test_different_portfolio_may_use_different_currency(db_session: Session) -> None:
+    user, portfolio, asset = _create_parents(db_session)
+    other_portfolio = _create_portfolio(
+        db_session,
+        user_id=user.id,
+        name="Other Currency Portfolio",
+    )
+    service = _create_service(db_session)
+    _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_currency="TRY",
+    )
+
+    result = _create_transaction(
+        service,
+        portfolio_id=other_portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_currency="USD",
+    )
+
+    assert result.transaction_currency == "USD"
+
+
+def test_different_asset_may_use_different_currency(db_session: Session) -> None:
+    user, portfolio, asset = _create_parents(db_session)
+    other_asset = _create_asset(db_session, asset_code="BBL")
+    service = _create_service(db_session)
+    _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_currency="TRY",
+    )
+
+    result = _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=other_asset.id,
+        current_user=user,
+        transaction_currency="USD",
+    )
+
+    assert result.transaction_currency == "USD"
+
+
+def test_legacy_null_currency_does_not_block_new_currency(db_session: Session) -> None:
+    user, portfolio, asset = _create_parents(db_session)
+    db_session.add(
+        Transaction(
+            portfolio_id=portfolio.id,
+            asset_id=asset.id,
+            transaction_type="BUY",
+            quantity=Decimal("1.00000000"),
+            unit_price=Decimal("1.00000000"),
+            transaction_currency=None,
+            transaction_date=TRANSACTION_DATE,
+        )
+    )
+    db_session.flush()
+    service = _create_service(db_session)
+
+    result = _create_transaction(
+        service,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        current_user=user,
+        transaction_currency="EUR",
+    )
+
+    assert result.transaction_currency == "EUR"

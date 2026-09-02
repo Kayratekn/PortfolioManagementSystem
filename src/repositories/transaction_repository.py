@@ -41,6 +41,24 @@ class TransactionRepository:
         )
         return int(self.db.scalar(statement) or 0)
 
+    def list_existing_non_null_currencies(
+        self,
+        *,
+        portfolio_id: int,
+        asset_id: int,
+    ) -> list[str]:
+        statement = (
+            select(Transaction.transaction_currency)
+            .where(
+                Transaction.portfolio_id == portfolio_id,
+                Transaction.asset_id == asset_id,
+                Transaction.transaction_currency.is_not(None),
+            )
+            .distinct()
+            .order_by(Transaction.transaction_currency.asc())
+        )
+        return list(self.db.scalars(statement))
+
     def get_net_quantity(self, *, portfolio_id: int, asset_id: int) -> Decimal:
         quantity_delta = case(
             (Transaction.transaction_type == "BUY", Transaction.quantity),

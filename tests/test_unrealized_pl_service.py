@@ -98,6 +98,7 @@ def _add_transaction(
     transaction_type: str = "BUY",
     quantity: Decimal = Decimal("10.00000000"),
     unit_price: Decimal = Decimal("20.00000000"),
+    transaction_currency: str | None = None,
     transaction_date: date = date(2026, 8, 20),
 ) -> Transaction:
     transaction = Transaction(
@@ -106,6 +107,7 @@ def _add_transaction(
         transaction_type=transaction_type,
         quantity=quantity,
         unit_price=unit_price,
+        transaction_currency=transaction_currency,
         transaction_date=transaction_date,
     )
     db_session.add(transaction)
@@ -551,7 +553,12 @@ def test_missing_asset_currency_returns_asset_currency_unavailable(
 ) -> None:
     user, portfolio = _owned_portfolio(db_session)
     asset = _create_asset(db_session, asset_code="NCY", currency=None)
-    _add_transaction(db_session, portfolio_id=portfolio.id, asset_id=asset.id)
+    _add_transaction(
+        db_session,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        transaction_currency="TRY",
+    )
     _add_daily_data(db_session, asset_id=asset.id, price=Decimal("25.00000000"))
     service = _create_service(db_session)
 
