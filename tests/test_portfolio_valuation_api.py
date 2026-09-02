@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from src.model.asset import Asset
 from src.model.exchange_rate import ExchangeRate
+from src.model.portfolio_cash_flow import PortfolioCashFlow
 from src.model.tefas_fund_daily_data import TefasFundDailyData
 from src.model.transaction import Transaction
 
@@ -100,7 +101,7 @@ def add_transaction(
     transaction_type: str = "BUY",
     quantity: Decimal = Decimal("10.00000000"),
     unit_price: Decimal = Decimal("1.00000000"),
-    transaction_currency: str | None = None,
+    transaction_currency: str | None = "TRY",
     transaction_date: date = date(2026, 8, 20),
 ) -> Transaction:
     transaction = Transaction(
@@ -163,6 +164,28 @@ def add_exchange_rate(
     db_session.commit()
     db_session.refresh(exchange_rate)
     return exchange_rate
+
+
+def add_cash_flow(
+    db_session: Session,
+    *,
+    portfolio_id: int,
+    flow_type: str = "DEPOSIT",
+    amount: Decimal = Decimal("100.00000000"),
+    currency: str = "TRY",
+    flow_date: date = date(2026, 8, 20),
+) -> PortfolioCashFlow:
+    cash_flow = PortfolioCashFlow(
+        portfolio_id=portfolio_id,
+        flow_type=flow_type,
+        amount=amount,
+        currency=currency,
+        flow_date=flow_date,
+    )
+    db_session.add(cash_flow)
+    db_session.commit()
+    db_session.refresh(cash_flow)
+    return cash_flow
 
 
 def create_owner_portfolio(client, *, email: str, username: str, base_currency: str = "TRY") -> tuple[str, int]:
@@ -804,3 +827,98 @@ def test_portfolio_valuation_api_serializes_identity_fx_freshness_as_not_applica
         "age_days": None,
         "status": "NOT_APPLICABLE",
     }
+
+
+def test_portfolio_valuation_api_exposes_cash_totals_as_decimal_strings(
+    client,
+    db_session: Session,
+) -> None:
+    token, portfolio_id = create_owner_portfolio(
+        client,
+        email="valuation-api-cash@example.com",
+        username="valuation-api-cash",
+    )
+    asset = create_tefas_asset(db_session, asset_code="CASHAPI", currency="TRY")
+    add_transaction(
+        db_session,
+        portfolio_id=portfolio_id,
+        asset_id=asset.id,
+        quantity=Decimal("10.00000000"),
+        unit_price=Decimal("1.00000000"),
+        transaction_currency="TRY",
+    )
+    add_daily_data(db_session, asset_id=asset.id, price=Decimal("2.00000000"))
+    add_cash_flow(
+        db_session,
+        portfolio_id=portfolio_id,
+        amount=Decimal("50.00000000"),
+        currency="TRY",
+    )
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "COMPLETE"
+    assert body["total_market_value"] == "20.0000000000000000"
+    assert body["total_cash_value"] == "40.0000000000000000"
+    assert body["total_portfolio_value"] == "60.0000000000000000"
+    assert body["items"][0]["weight"] == "1"
+    assert body["cash_items"][0]["currency"] == "TRY"
+    assert body["cash_items"][0]["amount"] == "40.0000000000000000"
+    assert body["cash_items"][0]["market_value"] == "40.0000000000000000"
+    assert body["cash_items"][0]["fx_source"] == "IDENTITY"
+    assert isinstance(body["total_cash_value"], str)
+    assert not isinstance(body["total_cash_value"], float)
+
+
+def test_portfolio_valuation_api_cash_only_portfolio(client, db_session: Session) -> None:
+    token, portfolio_id = create_owner_portfolio(
+        client,
+        email="valuation-api-cash-only@example.com",
+        username="valuation-api-cash-only",
+    )
+    add_cash_flow(
+        db_session,
+        portfolio_id=portfolio_id,
+        amount=Decimal("70.00000000"),
+        currency="TRY",
+    )
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "COMPLETE"
+    assert body["total_market_value"] == "0"
+    assert body["total_cash_value"] == "70.00000000"
+    assert body["total_portfolio_value"] == "70.00000000"
+    assert body["items"] == []
+    assert body["cash_items"][0]["amount"] == "70.00000000"
+
+
+def test_portfolio_valuation_api_missing_cash_fx_is_incomplete(
+    client,
+    db_session: Session,
+) -> None:
+    token, portfolio_id = create_owner_portfolio(
+        client,
+        email="valuation-api-missing-cash-fx@example.com",
+        username="valuation-api-missing-cash-fx",
+    )
+    add_cash_flow(
+        db_session,
+        portfolio_id=portfolio_id,
+        amount=Decimal("5.00000000"),
+        currency="USD",
+    )
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "INCOMPLETE"
+    assert body["total_cash_value"] is None
+    assert body["total_portfolio_value"] is None
+    assert body["cash_items"][0]["status"] == "UNAVAILABLE"
+    assert body["cash_items"][0]["unavailable_reason"] == "FX_UNAVAILABLE"

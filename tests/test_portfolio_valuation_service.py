@@ -10,14 +10,17 @@ from sqlalchemy.orm import Session
 from src.model.asset import Asset
 from src.model.exchange_rate import ExchangeRate
 from src.model.portfolio import Portfolio
+from src.model.portfolio_cash_flow import PortfolioCashFlow
 from src.model.tefas_fund_daily_data import TefasFundDailyData
 from src.model.transaction import Transaction
 from src.model.user import User
 from src.repositories.exchange_rate_repository import ExchangeRateRepository
+from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
 from src.repositories.transaction_repository import TransactionRepository
 from src.services.fx_conversion_service import FxConversionService
+from src.services.portfolio_cash_replay_service import PortfolioCashReplayService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
 
@@ -93,6 +96,7 @@ def _add_transaction(
     transaction_type: str = "BUY",
     quantity: Decimal = Decimal("10.00000000"),
     unit_price: Decimal = Decimal("1.00000000"),
+    transaction_currency: str | None = "TRY",
     transaction_date: date = TRANSACTION_DATE,
 ) -> Transaction:
     transaction = Transaction(
@@ -101,6 +105,7 @@ def _add_transaction(
         transaction_type=transaction_type,
         quantity=quantity,
         unit_price=unit_price,
+        transaction_currency=transaction_currency,
         transaction_date=transaction_date,
     )
     db_session.add(transaction)
@@ -153,15 +158,44 @@ def _add_exchange_rate(
     return exchange_rate
 
 
+def _add_cash_flow(
+    db_session: Session,
+    *,
+    portfolio_id: int,
+    flow_type: str = "DEPOSIT",
+    amount: Decimal = Decimal("100.00000000"),
+    currency: str = "TRY",
+    flow_date: date = TRANSACTION_DATE,
+) -> PortfolioCashFlow:
+    cash_flow = PortfolioCashFlow(
+        portfolio_id=portfolio_id,
+        flow_type=flow_type,
+        amount=amount,
+        currency=currency,
+        flow_date=flow_date,
+    )
+    db_session.add(cash_flow)
+    db_session.flush()
+    return cash_flow
+
+
 def _create_service(db_session: Session) -> PortfolioValuationService:
+    portfolio_repository = PortfolioRepository(db_session)
+    transaction_repository = TransactionRepository(db_session)
+    cash_flow_repository = PortfolioCashFlowRepository(db_session)
     return PortfolioValuationService(
-        portfolio_repository=PortfolioRepository(db_session),
-        transaction_repository=TransactionRepository(db_session),
+        portfolio_repository=portfolio_repository,
+        transaction_repository=transaction_repository,
         tefas_valuation_price_service=TefasValuationPriceService(
             TefasFundDailyDataRepository(db_session),
         ),
         fx_conversion_service=FxConversionService(
             ExchangeRateRepository(db_session),
+        ),
+        portfolio_cash_replay_service=PortfolioCashReplayService(
+            portfolio_repository=portfolio_repository,
+            cash_flow_repository=cash_flow_repository,
+            transaction_repository=transaction_repository,
         ),
     )
 
@@ -1035,3 +1069,443 @@ def test_empty_portfolio_has_no_weight_calculation(db_session: Session) -> None:
     assert result.status == "COMPLETE"
     assert result.total_market_value == Decimal("0")
     assert result.items == ()
+
+def test_same_currency_cash_is_added_to_total_portfolio_value(db_session: Session) -> None:
+    user, portfolio, asset = _portfolio_with_single_holding(db_session)
+    _add_daily_data(db_session, asset_id=asset.id, price=Decimal("2.00000000"))
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("50.00000000"),
+        currency="TRY",
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.total_market_value == Decimal("20.0000000000000000")
+    assert result.total_cash_value == Decimal("40.0000000000000000")
+    assert result.total_portfolio_value == Decimal("60.0000000000000000")
+    assert result.items[0].weight == Decimal("1")
+    assert result.cash_items[0].currency == "TRY"
+    assert result.cash_items[0].amount == Decimal("40.00000000")
+    assert result.cash_items[0].market_value == Decimal("40.0000000000000000")
+    assert result.cash_items[0].fx_source == "IDENTITY"
+
+
+def test_foreign_cash_converts_with_latest_on_or_before_fx(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id, base_currency="TRY")
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("3.00000000"),
+        currency="USD",
+    )
+    _add_exchange_rate(
+        db_session,
+        base_currency="USD",
+        quote_currency="TRY",
+        rate_date=date(2026, 8, 20),
+        forex_buying=Decimal("30.00000000"),
+        forex_selling=Decimal("32.00000000"),
+    )
+    _add_exchange_rate(
+        db_session,
+        base_currency="USD",
+        quote_currency="TRY",
+        rate_date=date(2026, 8, 25),
+        forex_buying=Decimal("40.00000000"),
+        forex_selling=Decimal("42.00000000"),
+    )
+    _add_exchange_rate(
+        db_session,
+        base_currency="USD",
+        quote_currency="TRY",
+        rate_date=date(2026, 8, 27),
+        forex_buying=Decimal("50.00000000"),
+        forex_selling=Decimal("52.00000000"),
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.total_market_value == Decimal("0")
+    assert result.total_cash_value == Decimal("123.0000000000000000")
+    assert result.total_portfolio_value == Decimal("123.0000000000000000")
+    assert result.cash_items[0].fx_rate == Decimal("41.00000000")
+    assert result.cash_items[0].fx_rate_date == date(2026, 8, 25)
+    assert result.cash_items[0].fx_freshness.status == "STALE"
+
+
+def test_negative_cash_reduces_total_portfolio_value(db_session: Session) -> None:
+    user, portfolio, asset = _portfolio_with_single_holding(db_session)
+    _add_daily_data(db_session, asset_id=asset.id, price=Decimal("5.00000000"))
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        flow_type="WITHDRAWAL",
+        amount=Decimal("15.00000000"),
+        currency="TRY",
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.total_market_value == Decimal("50.0000000000000000")
+    assert result.total_cash_value == Decimal("-25.0000000000000000")
+    assert result.total_portfolio_value == Decimal("25.0000000000000000")
+    assert result.cash_items[0].amount == Decimal("-25.00000000")
+
+
+def test_future_cash_flow_is_excluded_from_historical_valuation(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("100.00000000"),
+        flow_date=date(2026, 8, 27),
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.total_cash_value == Decimal("0")
+    assert result.total_portfolio_value == Decimal("0")
+    assert result.cash_items == ()
+
+
+def test_future_transaction_is_excluded_from_cash_replay_in_valuation(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    asset = _create_asset(db_session, asset_code="FUT", currency="TRY")
+    _add_transaction(
+        db_session,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        quantity=Decimal("10.00000000"),
+        unit_price=Decimal("9.00000000"),
+        transaction_currency="TRY",
+        transaction_date=date(2026, 8, 27),
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.total_market_value == Decimal("0")
+    assert result.total_cash_value == Decimal("0")
+    assert result.total_portfolio_value == Decimal("0")
+    assert result.cash_items == ()
+
+
+def test_legacy_null_transaction_currency_makes_valuation_incomplete_without_total(
+    db_session: Session,
+) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    asset = _create_asset(db_session, asset_code="LEG", currency=None)
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("100.00000000"),
+        currency="TRY",
+    )
+    _add_transaction(
+        db_session,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        quantity=Decimal("2.00000000"),
+        unit_price=Decimal("10.00000000"),
+        transaction_currency=None,
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "INCOMPLETE"
+    assert result.total_cash_value is None
+    assert result.total_portfolio_value is None
+    assert result.cash_items[0].currency == "TRY"
+    assert result.cash_items[0].amount == Decimal("100.00000000")
+    assert result.cash_items[0].market_value == Decimal("100.00000000")
+
+
+def test_missing_cash_fx_makes_valuation_incomplete_without_total(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id, base_currency="TRY")
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("5.00000000"),
+        currency="USD",
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "INCOMPLETE"
+    assert result.total_cash_value is None
+    assert result.total_portfolio_value is None
+    assert result.cash_items[0].status == "UNAVAILABLE"
+    assert result.cash_items[0].unavailable_reason == "FX_UNAVAILABLE"
+    assert result.cash_items[0].market_value is None
+
+
+def test_asset_currency_is_not_used_for_cash_currency(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id, base_currency="TRY")
+    asset = _create_asset(db_session, asset_code="NOCASHFX", currency="TRY")
+    _add_transaction(
+        db_session,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        quantity=Decimal("2.00000000"),
+        unit_price=Decimal("10.00000000"),
+        transaction_currency="USD",
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "INCOMPLETE"
+    assert result.cash_items[0].currency == "USD"
+    assert result.cash_items[0].amount == Decimal("-20.0000000000000000")
+    assert result.cash_items[0].unavailable_reason == "FX_UNAVAILABLE"
+
+
+def test_foreign_currency_negative_cash_converts_and_reduces_totals(
+    db_session: Session,
+) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id, base_currency="TRY")
+    asset = _create_asset(db_session, asset_code="NEGCASH", currency="TRY")
+    _add_transaction(
+        db_session,
+        portfolio_id=portfolio.id,
+        asset_id=asset.id,
+        quantity=Decimal("10.00000000"),
+        unit_price=Decimal("1.00000000"),
+        transaction_currency="USD",
+    )
+    _add_daily_data(db_session, asset_id=asset.id, price=Decimal("5.00000000"))
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        flow_type="WITHDRAWAL",
+        amount=Decimal("3.00000000"),
+        currency="USD",
+    )
+    _add_exchange_rate(
+        db_session,
+        base_currency="USD",
+        quote_currency="TRY",
+        rate_date=date(2026, 8, 25),
+        forex_buying=Decimal("40.00000000"),
+        forex_selling=Decimal("42.00000000"),
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.total_market_value == Decimal("50.0000000000000000")
+    assert result.cash_items[0].currency == "USD"
+    assert result.cash_items[0].amount == Decimal("-13.0000000000000000")
+    assert result.cash_items[0].fx_rate == Decimal("41.00000000")
+    assert result.cash_items[0].market_value == Decimal("-533.000000000000000000000000")
+    assert result.total_cash_value == Decimal("-533.000000000000000000000000")
+    assert result.total_portfolio_value == Decimal("-483.000000000000000000000000")
+
+
+def test_multiple_foreign_cash_currencies_keep_available_item_when_one_fx_missing(
+    db_session: Session,
+) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id, base_currency="TRY")
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("3.00000000"),
+        currency="USD",
+    )
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("2.00000000"),
+        currency="EUR",
+    )
+    _add_exchange_rate(
+        db_session,
+        base_currency="USD",
+        quote_currency="TRY",
+        rate_date=date(2026, 8, 25),
+        forex_buying=Decimal("40.00000000"),
+        forex_selling=Decimal("42.00000000"),
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "INCOMPLETE"
+    assert result.total_market_value == Decimal("0")
+    assert result.total_cash_value is None
+    assert result.total_portfolio_value is None
+    assert [item.currency for item in result.cash_items] == ["EUR", "USD"]
+
+    eur_item = result.cash_items[0]
+    assert eur_item.status == "UNAVAILABLE"
+    assert eur_item.unavailable_reason == "FX_UNAVAILABLE"
+    assert eur_item.amount == Decimal("2.00000000")
+    assert eur_item.market_value is None
+
+    usd_item = result.cash_items[1]
+    assert usd_item.status == "COMPLETE"
+    assert usd_item.unavailable_reason is None
+    assert usd_item.amount == Decimal("3.00000000")
+    assert usd_item.fx_rate == Decimal("41.00000000")
+    assert usd_item.market_value == Decimal("123.0000000000000000")
+
+
+def test_cash_only_portfolio_is_complete_when_cash_is_valued(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("70.00000000"),
+        currency="TRY",
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.items == ()
+    assert result.total_market_value == Decimal("0")
+    assert result.total_cash_value == Decimal("70.00000000")
+    assert result.total_portfolio_value == Decimal("70.00000000")
+
+
+def test_empty_portfolio_includes_zero_cash_and_portfolio_totals(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "COMPLETE"
+    assert result.total_market_value == Decimal("0")
+    assert result.total_cash_value == Decimal("0")
+    assert result.total_portfolio_value == Decimal("0")
+    assert result.items == ()
+    assert result.cash_items == ()
+
+
+def test_asset_incomplete_cash_complete_has_no_total_portfolio_value(
+    db_session: Session,
+) -> None:
+    user, portfolio, asset = _portfolio_with_single_holding(
+        db_session,
+        asset_currency=None,
+    )
+    _add_daily_data(db_session, asset_id=asset.id, price=Decimal("2.00000000"))
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("50.00000000"),
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.status == "INCOMPLETE"
+    assert result.total_market_value is None
+    assert result.total_cash_value == Decimal("40.0000000000000000")
+    assert result.total_portfolio_value is None
+    assert result.cash_items[0].status == "COMPLETE"
+    assert all(item.weight is None for item in result.items)
+
+
+def test_total_market_value_and_asset_weights_remain_asset_only(db_session: Session) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(db_session, user_id=user.id)
+    first_asset = _create_asset(db_session, asset_code="WGT1", currency="TRY")
+    second_asset = _create_asset(db_session, asset_code="WGT2", currency="TRY")
+    _add_transaction(
+        db_session,
+        portfolio_id=portfolio.id,
+        asset_id=first_asset.id,
+        quantity=Decimal("10.00000000"),
+        unit_price=Decimal("1.00000000"),
+    )
+    _add_transaction(
+        db_session,
+        portfolio_id=portfolio.id,
+        asset_id=second_asset.id,
+        quantity=Decimal("10.00000000"),
+        unit_price=Decimal("1.00000000"),
+    )
+    _add_daily_data(db_session, asset_id=first_asset.id, price=Decimal("2.50000000"))
+    _add_daily_data(db_session, asset_id=second_asset.id, price=Decimal("7.50000000"))
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("100.00000000"),
+        currency="TRY",
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.total_market_value == Decimal("100.0000000000000000")
+    assert result.total_cash_value == Decimal("80.0000000000000000")
+    assert result.total_portfolio_value == Decimal("180.0000000000000000")
+    assert result.items[0].weight == Decimal("0.25")
+    assert result.items[1].weight == Decimal("0.75")
