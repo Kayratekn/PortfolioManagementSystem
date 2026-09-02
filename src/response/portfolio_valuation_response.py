@@ -33,6 +33,21 @@ class PortfolioValuationItemResponse(BaseModel):
     weight: Decimal | None
 
 
+class PortfolioValuationCashItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    currency: str
+    amount: Decimal
+    status: str
+    unavailable_reason: str | None
+    fx_rate: Decimal | None
+    fx_rate_date: date | None
+    fx_freshness: MarketDataFreshnessResponse
+    fx_rate_kind: str | None
+    fx_source: str | None
+    market_value: Decimal | None
+
+
 class PortfolioValuationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,4 +56,7 @@ class PortfolioValuationResponse(BaseModel):
     valuation_date: date
     status: str
     total_market_value: Decimal | None
+    total_cash_value: Decimal | None
+    total_portfolio_value: Decimal | None
     items: list[PortfolioValuationItemResponse]
+    cash_items: list[PortfolioValuationCashItemResponse]

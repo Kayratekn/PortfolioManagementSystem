@@ -10,6 +10,7 @@ from src.services.market_data_freshness import (
     unavailable_market_data_freshness,
 )
 from src.services.portfolio_valuation_service import (
+    PortfolioValuationCashItem,
     PortfolioValuationItem,
     PortfolioValuationResult,
 )
@@ -49,7 +50,10 @@ def test_portfolio_valuation_response_maps_from_service_dataclasses() -> None:
         valuation_date=date(2026, 8, 26),
         status="COMPLETE",
         total_market_value=Decimal("32.5000000000000000"),
+        total_cash_value=Decimal("0"),
+        total_portfolio_value=Decimal("32.5000000000000000"),
         items=(item,),
+        cash_items=(),
     )
 
     response = PortfolioValuationResponse.model_validate(result)
@@ -59,6 +63,9 @@ def test_portfolio_valuation_response_maps_from_service_dataclasses() -> None:
     assert response.valuation_date == date(2026, 8, 26)
     assert response.status == "COMPLETE"
     assert response.total_market_value == Decimal("32.5000000000000000")
+    assert response.total_cash_value == Decimal("0")
+    assert response.total_portfolio_value == Decimal("32.5000000000000000")
+    assert response.cash_items == []
     assert isinstance(response.items, list)
     assert len(response.items) == 1
     assert response.items[0].asset_code == "AAL"
@@ -76,14 +83,22 @@ def test_portfolio_valuation_response_serializes_decimals_as_strings() -> None:
         valuation_date=date(2026, 8, 26),
         status="COMPLETE",
         total_market_value=Decimal("1.23456789"),
+        total_cash_value=Decimal("2.00000000"),
+        total_portfolio_value=Decimal("3.23456789"),
         items=(),
+        cash_items=(),
     )
 
     dumped = PortfolioValuationResponse.model_validate(result).model_dump(mode="json")
 
     assert dumped["total_market_value"] == "1.23456789"
     assert isinstance(dumped["total_market_value"], str)
+    assert dumped["total_cash_value"] == "2.00000000"
+    assert isinstance(dumped["total_cash_value"], str)
+    assert dumped["total_portfolio_value"] == "3.23456789"
+    assert isinstance(dumped["total_portfolio_value"], str)
     assert dumped["items"] == []
+    assert dumped["cash_items"] == []
 
 
 def test_portfolio_valuation_response_preserves_nullable_provenance_fields() -> None:
@@ -120,7 +135,10 @@ def test_portfolio_valuation_response_preserves_nullable_provenance_fields() -> 
         valuation_date=date(2026, 8, 26),
         status="INCOMPLETE",
         total_market_value=None,
+        total_cash_value=None,
+        total_portfolio_value=None,
         items=(item,),
+        cash_items=(),
     )
 
     response = PortfolioValuationResponse.model_validate(result)
@@ -168,7 +186,10 @@ def test_portfolio_valuation_response_serializes_item_weight_as_string() -> None
         valuation_date=date(2026, 8, 26),
         status="COMPLETE",
         total_market_value=Decimal("130.0000000000000000"),
+        total_cash_value=Decimal("0"),
+        total_portfolio_value=Decimal("130.0000000000000000"),
         items=(item,),
+        cash_items=(),
     )
 
     dumped = PortfolioValuationResponse.model_validate(result).model_dump(mode="json")
@@ -210,7 +231,10 @@ def test_portfolio_valuation_response_serializes_none_weight_as_null() -> None:
         valuation_date=date(2026, 8, 26),
         status="INCOMPLETE",
         total_market_value=None,
+        total_cash_value=None,
+        total_portfolio_value=None,
         items=(item,),
+        cash_items=(),
     )
 
     dumped = PortfolioValuationResponse.model_validate(result).model_dump(mode="json")
@@ -252,7 +276,10 @@ def test_portfolio_valuation_response_serializes_freshness_fields() -> None:
         valuation_date=date(2026, 8, 26),
         status="COMPLETE",
         total_market_value=Decimal("1300.0000000000000000"),
+        total_cash_value=Decimal("0"),
+        total_portfolio_value=Decimal("1300.0000000000000000"),
         items=(item,),
+        cash_items=(),
     )
 
     dumped = PortfolioValuationResponse.model_validate(result).model_dump(mode="json")
@@ -267,5 +294,46 @@ def test_portfolio_valuation_response_serializes_freshness_fields() -> None:
         "requested_date": "2026-08-26",
         "effective_date": "2026-08-24",
         "age_days": 2,
+        "status": "STALE",
+    }
+
+
+def test_portfolio_valuation_response_serializes_cash_items() -> None:
+    cash_item = PortfolioValuationCashItem(
+        currency="USD",
+        amount=Decimal("3.50000000"),
+        status="COMPLETE",
+        unavailable_reason=None,
+        fx_rate=Decimal("40.50000000"),
+        fx_rate_date=date(2026, 8, 25),
+        fx_freshness=observed_market_data_freshness(
+            requested_date=date(2026, 8, 26),
+            effective_date=date(2026, 8, 25),
+        ),
+        fx_rate_kind="TCMB_MIDPOINT",
+        fx_source="TCMB",
+        market_value=Decimal("141.7500000000000000"),
+    )
+    result = PortfolioValuationResult(
+        portfolio_id=10,
+        base_currency="TRY",
+        valuation_date=date(2026, 8, 26),
+        status="COMPLETE",
+        total_market_value=Decimal("0"),
+        total_cash_value=Decimal("141.7500000000000000"),
+        total_portfolio_value=Decimal("141.7500000000000000"),
+        items=(),
+        cash_items=(cash_item,),
+    )
+
+    dumped = PortfolioValuationResponse.model_validate(result).model_dump(mode="json")
+
+    assert dumped["cash_items"][0]["amount"] == "3.50000000"
+    assert dumped["cash_items"][0]["fx_rate"] == "40.50000000"
+    assert dumped["cash_items"][0]["market_value"] == "141.7500000000000000"
+    assert dumped["cash_items"][0]["fx_freshness"] == {
+        "requested_date": "2026-08-26",
+        "effective_date": "2026-08-25",
+        "age_days": 1,
         "status": "STALE",
     }

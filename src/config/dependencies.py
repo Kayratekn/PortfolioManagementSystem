@@ -22,6 +22,7 @@ from src.services.cost_basis_service import CostBasisService
 from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
 from src.services.portfolio_cash_flow_service import PortfolioCashFlowService
+from src.services.portfolio_cash_replay_service import PortfolioCashReplayService
 from src.services.portfolio_service import PortfolioService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.realized_pl_service import RealizedPlService
@@ -138,6 +139,24 @@ def get_portfolio_cash_flow_service(
     )
 
 
+def get_portfolio_cash_replay_service(
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    cash_flow_repository: Annotated[
+        PortfolioCashFlowRepository,
+        Depends(get_portfolio_cash_flow_repository),
+    ],
+    transaction_repository: Annotated[
+        TransactionRepository,
+        Depends(get_transaction_repository),
+    ],
+) -> PortfolioCashReplayService:
+    return PortfolioCashReplayService(
+        portfolio_repository=portfolio_repository,
+        cash_flow_repository=cash_flow_repository,
+        transaction_repository=transaction_repository,
+    )
+
+
 def get_holding_service(
     portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
     transaction_repository: Annotated[
@@ -228,12 +247,17 @@ def get_portfolio_valuation_service(
         FxConversionService,
         Depends(get_fx_conversion_service),
     ],
+    portfolio_cash_replay_service: Annotated[
+        PortfolioCashReplayService,
+        Depends(get_portfolio_cash_replay_service),
+    ],
 ) -> PortfolioValuationService:
     return PortfolioValuationService(
         portfolio_repository=portfolio_repository,
         transaction_repository=transaction_repository,
         tefas_valuation_price_service=tefas_valuation_price_service,
         fx_conversion_service=fx_conversion_service,
+        portfolio_cash_replay_service=portfolio_cash_replay_service,
     )
 
 

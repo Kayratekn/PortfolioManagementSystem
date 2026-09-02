@@ -17,6 +17,10 @@ from src.services.market_data_freshness import (
     observed_market_data_freshness,
     unavailable_market_data_freshness,
 )
+from src.services.portfolio_cash_replay_service import (
+    PORTFOLIO_CASH_REPLAY_STATUS_COMPLETE,
+    PortfolioCashReplayService,
+)
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
 
 
@@ -60,13 +64,30 @@ class PortfolioValuationItem:
 
 
 @dataclass(frozen=True)
+class PortfolioValuationCashItem:
+    currency: str
+    amount: Decimal
+    status: str
+    unavailable_reason: str | None
+    fx_rate: Decimal | None
+    fx_rate_date: date | None
+    fx_freshness: MarketDataFreshness
+    fx_rate_kind: str | None
+    fx_source: str | None
+    market_value: Decimal | None
+
+
+@dataclass(frozen=True)
 class PortfolioValuationResult:
     portfolio_id: int
     base_currency: str
     valuation_date: date
     status: str
     total_market_value: Decimal | None
+    total_cash_value: Decimal | None
+    total_portfolio_value: Decimal | None
     items: tuple[PortfolioValuationItem, ...]
+    cash_items: tuple[PortfolioValuationCashItem, ...]
 
 
 class PortfolioValuationService:
@@ -76,11 +97,13 @@ class PortfolioValuationService:
         transaction_repository: TransactionRepository,
         tefas_valuation_price_service: TefasValuationPriceService,
         fx_conversion_service: FxConversionService,
+        portfolio_cash_replay_service: PortfolioCashReplayService,
     ) -> None:
         self.portfolio_repository = portfolio_repository
         self.transaction_repository = transaction_repository
         self.tefas_valuation_price_service = tefas_valuation_price_service
         self.fx_conversion_service = fx_conversion_service
+        self.portfolio_cash_replay_service = portfolio_cash_replay_service
 
     def get_valuation(
         self,
@@ -103,21 +126,79 @@ class PortfolioValuationService:
             portfolio_id=portfolio_id,
             transaction_date=valuation_date,
         )
-        if not holdings:
-            return PortfolioValuationResult(
-                portfolio_id=portfolio_id,
+        asset_items, asset_status, total_market_value = self._build_asset_valuation(
+            holdings=holdings,
+            base_currency=portfolio.base_currency,
+            valuation_date=valuation_date,
+        )
+
+        cash_replay = self.portfolio_cash_replay_service.get_cash_balances(
+            portfolio_id=portfolio_id,
+            current_user=current_user,
+            as_of_date=valuation_date,
+        )
+        cash_items = tuple(
+            self._build_cash_item(
+                currency=balance.currency,
+                amount=balance.amount,
                 base_currency=portfolio.base_currency,
                 valuation_date=valuation_date,
-                status=PORTFOLIO_STATUS_COMPLETE,
-                total_market_value=Decimal("0"),
-                items=(),
             )
+            for balance in cash_replay.balances
+        )
+        cash_has_unavailable_item = any(
+            item.status == ITEM_STATUS_UNAVAILABLE for item in cash_items
+        )
+        cash_replay_is_complete = cash_replay.status == PORTFOLIO_CASH_REPLAY_STATUS_COMPLETE
+        if cash_replay_is_complete and not cash_has_unavailable_item:
+            total_cash_value = sum(
+                (item.market_value for item in cash_items),
+                Decimal("0"),
+            )
+        else:
+            total_cash_value = None
+
+        is_complete = (
+            asset_status == PORTFOLIO_STATUS_COMPLETE
+            and cash_replay_is_complete
+            and not cash_has_unavailable_item
+        )
+        portfolio_status = (
+            PORTFOLIO_STATUS_COMPLETE if is_complete else PORTFOLIO_STATUS_INCOMPLETE
+        )
+        total_portfolio_value = (
+            total_market_value + total_cash_value
+            if is_complete and total_market_value is not None and total_cash_value is not None
+            else None
+        )
+
+        return PortfolioValuationResult(
+            portfolio_id=portfolio_id,
+            base_currency=portfolio.base_currency,
+            valuation_date=valuation_date,
+            status=portfolio_status,
+            total_market_value=total_market_value,
+            total_cash_value=total_cash_value,
+            total_portfolio_value=total_portfolio_value,
+            items=asset_items,
+            cash_items=cash_items,
+        )
+
+    def _build_asset_valuation(
+        self,
+        *,
+        holdings: list[tuple[Asset, Decimal]],
+        base_currency: str,
+        valuation_date: date,
+    ) -> tuple[tuple[PortfolioValuationItem, ...], str, Decimal | None]:
+        if not holdings:
+            return (), PORTFOLIO_STATUS_COMPLETE, Decimal("0")
 
         items = tuple(
             self._build_item(
                 asset=asset,
                 quantity=quantity,
-                base_currency=portfolio.base_currency,
+                base_currency=base_currency,
                 valuation_date=valuation_date,
             )
             for asset, quantity in holdings
@@ -125,7 +206,7 @@ class PortfolioValuationService:
         has_unavailable_item = any(item.status == ITEM_STATUS_UNAVAILABLE for item in items)
         if has_unavailable_item:
             total_market_value = None
-            portfolio_status = PORTFOLIO_STATUS_INCOMPLETE
+            asset_status = PORTFOLIO_STATUS_INCOMPLETE
         else:
             total_market_value = sum(
                 (item.market_value for item in items),
@@ -135,15 +216,69 @@ class PortfolioValuationService:
                 replace(item, weight=item.market_value / total_market_value)
                 for item in items
             )
-            portfolio_status = PORTFOLIO_STATUS_COMPLETE
+            asset_status = PORTFOLIO_STATUS_COMPLETE
 
-        return PortfolioValuationResult(
-            portfolio_id=portfolio_id,
-            base_currency=portfolio.base_currency,
+        return items, asset_status, total_market_value
+
+    def _build_cash_item(
+        self,
+        *,
+        currency: str,
+        amount: Decimal,
+        base_currency: str,
+        valuation_date: date,
+    ) -> PortfolioValuationCashItem:
+        if currency == base_currency:
+            return PortfolioValuationCashItem(
+                currency=currency,
+                amount=amount,
+                status=ITEM_STATUS_COMPLETE,
+                unavailable_reason=None,
+                fx_rate=Decimal("1"),
+                fx_rate_date=None,
+                fx_freshness=not_applicable_market_data_freshness(
+                    requested_date=valuation_date,
+                ),
+                fx_rate_kind="IDENTITY",
+                fx_source="IDENTITY",
+                market_value=amount,
+            )
+
+        fx_rate = self.fx_conversion_service.get_rate(
+            source_currency=currency,
+            target_currency=base_currency,
             valuation_date=valuation_date,
-            status=portfolio_status,
-            total_market_value=total_market_value,
-            items=items,
+        )
+        if fx_rate is None:
+            return PortfolioValuationCashItem(
+                currency=currency,
+                amount=amount,
+                status=ITEM_STATUS_UNAVAILABLE,
+                unavailable_reason=REASON_FX_UNAVAILABLE,
+                fx_rate=None,
+                fx_rate_date=None,
+                fx_freshness=unavailable_market_data_freshness(
+                    requested_date=valuation_date,
+                ),
+                fx_rate_kind=None,
+                fx_source=None,
+                market_value=None,
+            )
+
+        return PortfolioValuationCashItem(
+            currency=currency,
+            amount=amount,
+            status=ITEM_STATUS_COMPLETE,
+            unavailable_reason=None,
+            fx_rate=fx_rate.rate,
+            fx_rate_date=fx_rate.rate_date,
+            fx_freshness=observed_market_data_freshness(
+                requested_date=valuation_date,
+                effective_date=fx_rate.rate_date,
+            ),
+            fx_rate_kind=fx_rate.rate_kind,
+            fx_source=fx_rate.source,
+            market_value=amount * fx_rate.rate,
         )
 
     def _build_item(
