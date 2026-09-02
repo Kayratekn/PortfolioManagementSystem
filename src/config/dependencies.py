@@ -11,6 +11,7 @@ from src.config.database import get_db_session
 from src.config.settings import get_settings
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.exchange_rate_repository import ExchangeRateRepository
+from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
@@ -20,6 +21,7 @@ from src.services.asset_service import AssetService
 from src.services.cost_basis_service import CostBasisService
 from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
+from src.services.portfolio_cash_flow_service import PortfolioCashFlowService
 from src.services.portfolio_service import PortfolioService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.realized_pl_service import RealizedPlService
@@ -53,6 +55,12 @@ def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetReposi
 
 def get_transaction_repository(db: Annotated[Session, Depends(get_db)]) -> TransactionRepository:
     return TransactionRepository(db)
+
+
+def get_portfolio_cash_flow_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> PortfolioCashFlowRepository:
+    return PortfolioCashFlowRepository(db)
 
 
 def get_exchange_rate_repository(db: Annotated[Session, Depends(get_db)]) -> ExchangeRateRepository:
@@ -112,6 +120,21 @@ def get_transaction_service(
         portfolio_repository=portfolio_repository,
         asset_repository=asset_repository,
         transaction_repository=transaction_repository,
+    )
+
+
+def get_portfolio_cash_flow_service(
+    db: Annotated[Session, Depends(get_db)],
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    cash_flow_repository: Annotated[
+        PortfolioCashFlowRepository,
+        Depends(get_portfolio_cash_flow_repository),
+    ],
+) -> PortfolioCashFlowService:
+    return PortfolioCashFlowService(
+        db=db,
+        portfolio_repository=portfolio_repository,
+        cash_flow_repository=cash_flow_repository,
     )
 
 

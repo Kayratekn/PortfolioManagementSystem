@@ -15,6 +15,7 @@ from src.controller.auth_controller import router as auth_router
 from src.controller.cost_basis_controller import router as cost_basis_router
 from src.controller.health_controller import router as health_router
 from src.controller.holding_controller import router as holding_router
+from src.controller.portfolio_cash_flow_controller import router as portfolio_cash_flow_router
 from src.controller.portfolio_controller import router as portfolio_router
 from src.controller.portfolio_valuation_controller import router as portfolio_valuation_router
 from src.controller.realized_pl_controller import router as realized_pl_router
@@ -30,6 +31,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(asset_router)
 app.include_router(portfolio_router)
+app.include_router(portfolio_cash_flow_router)
 app.include_router(transaction_router)
 app.include_router(holding_router)
 app.include_router(portfolio_valuation_router)
