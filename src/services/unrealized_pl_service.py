@@ -8,6 +8,10 @@ from src.model.asset import Asset
 from src.model.user import User
 from src.repositories.transaction_repository import TransactionRepository
 from src.services.cost_basis_service import CostBasisService, CostBasisItem
+from src.services.market_data_freshness import (
+    MarketDataFreshness,
+    observed_market_data_freshness,
+)
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
 
 
@@ -38,6 +42,7 @@ class UnrealizedPlItem:
     average_cost_per_unit: Decimal | None
     price: Decimal | None
     price_date: date | None
+    price_freshness: MarketDataFreshness
     price_kind: str | None
     price_source: str | None
     native_market_value: Decimal | None
@@ -133,6 +138,7 @@ class UnrealizedPlService:
                 asset=asset,
                 quantity=holding_quantity,
                 cost_basis_item=cost_basis_item,
+                requested_date=as_of_date,
                 unavailable_reason=REASON_UNSUPPORTED_ASSET,
             )
 
@@ -145,6 +151,7 @@ class UnrealizedPlService:
                 asset=asset,
                 quantity=holding_quantity,
                 cost_basis_item=cost_basis_item,
+                requested_date=as_of_date,
                 unavailable_reason=REASON_PRICE_UNAVAILABLE,
             )
 
@@ -155,6 +162,7 @@ class UnrealizedPlService:
                 asset=asset,
                 quantity=holding_quantity,
                 cost_basis_item=cost_basis_item,
+                requested_date=as_of_date,
                 unavailable_reason=cost_basis_item.unavailable_reason,
                 price=valuation_price.price,
                 price_date=valuation_price.price_date,
@@ -179,6 +187,10 @@ class UnrealizedPlService:
             average_cost_per_unit=cost_basis_item.average_cost_per_unit,
             price=valuation_price.price,
             price_date=valuation_price.price_date,
+            price_freshness=observed_market_data_freshness(
+                requested_date=as_of_date,
+                effective_date=valuation_price.price_date,
+            ),
             price_kind=valuation_price.price_kind,
             price_source=valuation_price.source,
             native_market_value=native_market_value,
@@ -248,6 +260,7 @@ class UnrealizedPlService:
         asset: Asset,
         quantity: Decimal,
         cost_basis_item: CostBasisItem,
+        requested_date: date,
         unavailable_reason: str,
         price: Decimal | None = None,
         price_date: date | None = None,
@@ -266,6 +279,10 @@ class UnrealizedPlService:
             average_cost_per_unit=cost_basis_item.average_cost_per_unit,
             price=price,
             price_date=price_date,
+            price_freshness=observed_market_data_freshness(
+                requested_date=requested_date,
+                effective_date=price_date,
+            ),
             price_kind=price_kind,
             price_source=price_source,
             native_market_value=None,

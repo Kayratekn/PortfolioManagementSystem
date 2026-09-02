@@ -730,3 +730,70 @@ def test_weight_is_serialized_as_string_never_float(client, db_session: Session)
     assert weight == "1"
     assert isinstance(weight, str)
     assert not isinstance(weight, float)
+
+
+def test_portfolio_valuation_api_serializes_market_data_freshness(
+    client,
+    db_session: Session,
+) -> None:
+    token, portfolio_id = create_owner_portfolio(
+        client,
+        email="valuation-freshness-api@example.com",
+        username="valuation-freshness-api",
+        base_currency="TRY",
+    )
+    asset = create_tefas_asset(db_session, asset_code="VFH", currency="USD")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=asset.id)
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 25),
+        price=Decimal("2.00000000"),
+    )
+    add_exchange_rate(
+        db_session,
+        base_currency="USD",
+        quote_currency="TRY",
+        rate_date=date(2026, 8, 24),
+    )
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["price_freshness"] == {
+        "requested_date": "2026-08-26",
+        "effective_date": "2026-08-25",
+        "age_days": 1,
+        "status": "STALE",
+    }
+    assert item["fx_freshness"] == {
+        "requested_date": "2026-08-26",
+        "effective_date": "2026-08-24",
+        "age_days": 2,
+        "status": "STALE",
+    }
+
+
+def test_portfolio_valuation_api_serializes_identity_fx_freshness_as_not_applicable(
+    client,
+    db_session: Session,
+) -> None:
+    token, portfolio_id = create_owner_portfolio(
+        client,
+        email="valuation-identity-freshness-api@example.com",
+        username="valuation-identity-freshness-api",
+    )
+    asset = create_tefas_asset(db_session, asset_code="VFI")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=asset.id)
+    add_daily_data(db_session, asset_id=asset.id)
+
+    response = client.get(valuation_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["fx_freshness"] == {
+        "requested_date": "2026-08-26",
+        "effective_date": None,
+        "age_days": None,
+        "status": "NOT_APPLICABLE",
+    }

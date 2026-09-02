@@ -780,3 +780,55 @@ def test_response_has_no_portfolio_level_pl_total_or_fx_base_currency_fields(
     }
     assert forbidden_body_fields.isdisjoint(body)
     assert forbidden_item_fields.isdisjoint(body["items"][0])
+
+
+def test_unrealized_pl_api_serializes_price_freshness(
+    client,
+    db_session: Session,
+) -> None:
+    token, portfolio_id = create_owner_portfolio(
+        client,
+        email="unrealized-pl-freshness-api@example.com",
+        username="unrealized-pl-freshness-api",
+    )
+    asset = create_asset(db_session, asset_code="UPF")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=asset.id)
+    add_daily_data(
+        db_session,
+        asset_id=asset.id,
+        data_date=date(2026, 8, 24),
+        price=Decimal("25.00000000"),
+    )
+
+    response = client.get(unrealized_pl_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    assert only_item(response.json())["price_freshness"] == {
+        "requested_date": "2026-08-25",
+        "effective_date": "2026-08-24",
+        "age_days": 1,
+        "status": "STALE",
+    }
+
+
+def test_unrealized_pl_api_serializes_missing_price_freshness_as_unavailable(
+    client,
+    db_session: Session,
+) -> None:
+    token, portfolio_id = create_owner_portfolio(
+        client,
+        email="unrealized-pl-unavailable-freshness-api@example.com",
+        username="unrealized-pl-unavailable-freshness-api",
+    )
+    asset = create_asset(db_session, asset_code="UPU")
+    add_transaction(db_session, portfolio_id=portfolio_id, asset_id=asset.id)
+
+    response = client.get(unrealized_pl_url(portfolio_id), headers=auth_headers(token))
+
+    assert response.status_code == 200
+    assert only_item(response.json())["price_freshness"] == {
+        "requested_date": "2026-08-25",
+        "effective_date": None,
+        "age_days": None,
+        "status": "UNAVAILABLE",
+    }
