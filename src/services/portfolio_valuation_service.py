@@ -11,6 +11,12 @@ from src.model.user import User
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.transaction_repository import TransactionRepository
 from src.services.fx_conversion_service import FxConversionService
+from src.services.market_data_freshness import (
+    MarketDataFreshness,
+    not_applicable_market_data_freshness,
+    observed_market_data_freshness,
+    unavailable_market_data_freshness,
+)
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
 
 
@@ -40,10 +46,12 @@ class PortfolioValuationItem:
     unavailable_reason: str | None
     price: Decimal | None
     price_date: date | None
+    price_freshness: MarketDataFreshness
     price_kind: str | None
     price_source: str | None
     fx_rate: Decimal | None
     fx_rate_date: date | None
+    fx_freshness: MarketDataFreshness
     fx_rate_kind: str | None
     fx_source: str | None
     native_market_value: Decimal | None
@@ -150,6 +158,7 @@ class PortfolioValuationService:
             return self._unavailable_item(
                 asset=asset,
                 quantity=quantity,
+                requested_date=valuation_date,
                 unavailable_reason=REASON_UNSUPPORTED_ASSET,
             )
 
@@ -161,6 +170,7 @@ class PortfolioValuationService:
             return self._unavailable_item(
                 asset=asset,
                 quantity=quantity,
+                requested_date=valuation_date,
                 unavailable_reason=REASON_PRICE_UNAVAILABLE,
             )
 
@@ -169,6 +179,7 @@ class PortfolioValuationService:
             return self._unavailable_item(
                 asset=asset,
                 quantity=quantity,
+                requested_date=valuation_date,
                 unavailable_reason=REASON_ASSET_CURRENCY_UNAVAILABLE,
                 price=valuation_price.price,
                 price_date=valuation_price.price_date,
@@ -186,6 +197,7 @@ class PortfolioValuationService:
             return self._unavailable_item(
                 asset=asset,
                 quantity=quantity,
+                requested_date=valuation_date,
                 unavailable_reason=REASON_FX_UNAVAILABLE,
                 price=valuation_price.price,
                 price_date=valuation_price.price_date,
@@ -205,10 +217,22 @@ class PortfolioValuationService:
             unavailable_reason=None,
             price=valuation_price.price,
             price_date=valuation_price.price_date,
+            price_freshness=observed_market_data_freshness(
+                requested_date=valuation_date,
+                effective_date=valuation_price.price_date,
+            ),
             price_kind=valuation_price.price_kind,
             price_source=valuation_price.source,
             fx_rate=fx_rate.rate,
             fx_rate_date=fx_rate.rate_date,
+            fx_freshness=(
+                not_applicable_market_data_freshness(requested_date=valuation_date)
+                if fx_rate.source == "IDENTITY" and fx_rate.rate_kind == "IDENTITY"
+                else observed_market_data_freshness(
+                    requested_date=valuation_date,
+                    effective_date=fx_rate.rate_date,
+                )
+            ),
             fx_rate_kind=fx_rate.rate_kind,
             fx_source=fx_rate.source,
             native_market_value=native_market_value,
@@ -229,6 +253,7 @@ class PortfolioValuationService:
         *,
         asset: Asset,
         quantity: Decimal,
+        requested_date: date,
         unavailable_reason: str,
         price: Decimal | None = None,
         price_date: date | None = None,
@@ -246,10 +271,17 @@ class PortfolioValuationService:
             unavailable_reason=unavailable_reason,
             price=price,
             price_date=price_date,
+            price_freshness=observed_market_data_freshness(
+                requested_date=requested_date,
+                effective_date=price_date,
+            ),
             price_kind=price_kind,
             price_source=price_source,
             fx_rate=None,
             fx_rate_date=None,
+            fx_freshness=unavailable_market_data_freshness(
+                requested_date=requested_date,
+            ),
             fx_rate_kind=None,
             fx_source=None,
             native_market_value=native_market_value,

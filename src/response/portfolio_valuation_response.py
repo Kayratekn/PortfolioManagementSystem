@@ -5,6 +5,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
+from src.response.market_data_freshness_response import MarketDataFreshnessResponse
+
 
 class PortfolioValuationItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -18,10 +20,12 @@ class PortfolioValuationItemResponse(BaseModel):
     unavailable_reason: str | None
     price: Decimal | None
     price_date: date | None
+    price_freshness: MarketDataFreshnessResponse
     price_kind: str | None
     price_source: str | None
     fx_rate: Decimal | None
     fx_rate_date: date | None
+    fx_freshness: MarketDataFreshnessResponse
     fx_rate_kind: str | None
     fx_source: str | None
     native_market_value: Decimal | None

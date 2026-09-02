@@ -4,6 +4,10 @@ from datetime import date
 from decimal import Decimal
 
 from src.response.unrealized_pl_response import UnrealizedPlResponse
+from src.services.market_data_freshness import (
+    observed_market_data_freshness,
+    unavailable_market_data_freshness,
+)
 from src.services.unrealized_pl_service import UnrealizedPlItem, UnrealizedPlResult
 
 
@@ -25,6 +29,10 @@ def test_unrealized_pl_dataclass_validates_to_pydantic_response() -> None:
                 average_cost_per_unit=Decimal("20.00000000"),
                 price=Decimal("25.00000000"),
                 price_date=date(2026, 8, 24),
+                price_freshness=observed_market_data_freshness(
+                    requested_date=date(2026, 8, 25),
+                    effective_date=date(2026, 8, 24),
+                ),
                 price_kind="NAV",
                 price_source="TEFAS",
                 native_market_value=Decimal("250.0000000000000000"),
@@ -46,6 +54,8 @@ def test_unrealized_pl_dataclass_validates_to_pydantic_response() -> None:
     assert item.asset_currency == "TRY"
     assert item.status == "COMPLETE"
     assert item.unavailable_reason is None
+    assert item.price_freshness.status == "STALE"
+    assert item.price_freshness.age_days == 1
     assert item.price_kind == "NAV"
     assert item.price_source == "TEFAS"
 
@@ -68,6 +78,9 @@ def test_unavailable_nullable_fields_are_accepted() -> None:
                 average_cost_per_unit=None,
                 price=None,
                 price_date=None,
+                price_freshness=unavailable_market_data_freshness(
+                    requested_date=date(2026, 8, 25),
+                ),
                 price_kind=None,
                 price_source=None,
                 native_market_value=None,
@@ -108,6 +121,10 @@ def test_decimal_fields_remain_decimal_in_python_response() -> None:
                 average_cost_per_unit=Decimal("1.666666666666666666666666667"),
                 price=Decimal("2.50000000"),
                 price_date=date(2026, 8, 25),
+                price_freshness=observed_market_data_freshness(
+                    requested_date=date(2026, 8, 25),
+                    effective_date=date(2026, 8, 25),
+                ),
                 price_kind="NAV",
                 price_source="TEFAS",
                 native_market_value=Decimal("3.0864197250000000"),
@@ -154,3 +171,42 @@ def test_response_contract_excludes_portfolio_total_and_fx_fields() -> None:
     assert "fx_date" not in field_names
     assert "market_value" not in field_names
     assert "unrealized_pl_percent" not in field_names
+
+def test_unrealized_pl_response_serializes_price_freshness() -> None:
+    result = UnrealizedPlResult(
+        portfolio_id=123,
+        as_of_date=date(2026, 8, 25),
+        status="COMPLETE",
+        items=(
+            UnrealizedPlItem(
+                asset_id=456,
+                asset_code="AAL",
+                asset_name="AAL Example Fund",
+                asset_currency="TRY",
+                status="COMPLETE",
+                unavailable_reason=None,
+                quantity=Decimal("10.00000000"),
+                total_cost_basis=Decimal("200.0000000000000000"),
+                average_cost_per_unit=Decimal("20.00000000"),
+                price=Decimal("25.00000000"),
+                price_date=date(2026, 8, 25),
+                price_freshness=observed_market_data_freshness(
+                    requested_date=date(2026, 8, 25),
+                    effective_date=date(2026, 8, 25),
+                ),
+                price_kind="NAV",
+                price_source="TEFAS",
+                native_market_value=Decimal("250.0000000000000000"),
+                native_unrealized_pl=Decimal("50.0000000000000000"),
+            ),
+        ),
+    )
+
+    dumped = UnrealizedPlResponse.model_validate(result).model_dump(mode="json")
+
+    assert dumped["items"][0]["price_freshness"] == {
+        "requested_date": "2026-08-25",
+        "effective_date": "2026-08-25",
+        "age_days": 0,
+        "status": "CURRENT",
+    }
