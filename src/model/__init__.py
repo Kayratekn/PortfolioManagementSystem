@@ -1,5 +1,7 @@
 from . import (
     asset,
+    benchmark,
+    benchmark_price,
     exchange_rate,
     portfolio,
     portfolio_cash_flow,
@@ -15,6 +17,8 @@ from . import (
 
 __all__ = [
     "asset",
+    "benchmark",
+    "benchmark_price",
     "exchange_rate",
     "portfolio",
     "portfolio_cash_flow",
