@@ -23,6 +23,7 @@ from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
 from src.services.portfolio_cash_flow_service import PortfolioCashFlowService
 from src.services.portfolio_cash_replay_service import PortfolioCashReplayService
+from src.services.portfolio_performance_service import PortfolioPerformanceService
 from src.services.portfolio_service import PortfolioService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.realized_pl_service import RealizedPlService
@@ -260,6 +261,29 @@ def get_portfolio_valuation_service(
         portfolio_cash_replay_service=portfolio_cash_replay_service,
     )
 
+
+
+def get_portfolio_performance_service(
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    cash_flow_repository: Annotated[
+        PortfolioCashFlowRepository,
+        Depends(get_portfolio_cash_flow_repository),
+    ],
+    fx_conversion_service: Annotated[
+        FxConversionService,
+        Depends(get_fx_conversion_service),
+    ],
+    portfolio_valuation_service: Annotated[
+        PortfolioValuationService,
+        Depends(get_portfolio_valuation_service),
+    ],
+) -> PortfolioPerformanceService:
+    return PortfolioPerformanceService(
+        portfolio_repository=portfolio_repository,
+        cash_flow_repository=cash_flow_repository,
+        fx_conversion_service=fx_conversion_service,
+        portfolio_valuation_service=portfolio_valuation_service,
+    )
 
 def get_tefas_fund_allocation_read_service(
     asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
