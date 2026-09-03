@@ -54,3 +54,21 @@ class PortfolioCashFlowRepository:
             .order_by(PortfolioCashFlow.flow_date.asc(), PortfolioCashFlow.id.asc())
         )
         return list(self.db.scalars(statement))
+
+    def list_by_portfolio_between(
+        self,
+        *,
+        portfolio_id: int,
+        start_date: date,
+        end_date: date,
+    ) -> list[PortfolioCashFlow]:
+        statement = (
+            select(PortfolioCashFlow)
+            .where(
+                PortfolioCashFlow.portfolio_id == portfolio_id,
+                PortfolioCashFlow.flow_date >= start_date,
+                PortfolioCashFlow.flow_date <= end_date,
+            )
+            .order_by(PortfolioCashFlow.flow_date.asc(), PortfolioCashFlow.id.asc())
+        )
+        return list(self.db.scalars(statement))

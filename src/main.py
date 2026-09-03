@@ -18,6 +18,7 @@ from src.controller.holding_controller import router as holding_router
 from src.controller.portfolio_cash_flow_controller import router as portfolio_cash_flow_router
 from src.controller.portfolio_controller import router as portfolio_router
 from src.controller.portfolio_valuation_controller import router as portfolio_valuation_router
+from src.controller.portfolio_performance_controller import router as portfolio_performance_router
 from src.controller.realized_pl_controller import router as realized_pl_router
 from src.controller.transaction_controller import router as transaction_router
 from src.controller.unrealized_pl_controller import router as unrealized_pl_router
@@ -35,6 +36,7 @@ app.include_router(portfolio_cash_flow_router)
 app.include_router(transaction_router)
 app.include_router(holding_router)
 app.include_router(portfolio_valuation_router)
+app.include_router(portfolio_performance_router)
 app.include_router(cost_basis_router)
 app.include_router(unrealized_pl_router)
 app.include_router(realized_pl_router)

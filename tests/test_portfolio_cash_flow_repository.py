@@ -103,3 +103,33 @@ def test_count_by_portfolio_isolates_portfolios(db_session: Session) -> None:
     repository.add(_build_cash_flow(portfolio_id=other_portfolio.id))
 
     assert repository.count_by_portfolio(portfolio_id=portfolio.id) == 2
+
+def test_list_by_portfolio_between_filters_inclusive_range_and_orders(
+    db_session: Session,
+) -> None:
+    user = _create_user(
+        db_session,
+        email="cash-flow-between@example.com",
+        username="cash-flow-between",
+    )
+    portfolio = _create_portfolio(db_session, user_id=user.id, name="Cash Flow Between")
+    other_portfolio = _create_portfolio(db_session, user_id=user.id, name="Other Between")
+    repository = PortfolioCashFlowRepository(db_session)
+    before = repository.add(_build_cash_flow(portfolio_id=portfolio.id, flow_date=date(2026, 9, 1)))
+    start = repository.add(_build_cash_flow(portfolio_id=portfolio.id, flow_date=date(2026, 9, 2)))
+    end_first = repository.add(_build_cash_flow(portfolio_id=portfolio.id, flow_date=date(2026, 9, 3)))
+    end_second = repository.add(_build_cash_flow(portfolio_id=portfolio.id, flow_type="WITHDRAWAL", flow_date=date(2026, 9, 3)))
+    after = repository.add(_build_cash_flow(portfolio_id=portfolio.id, flow_date=date(2026, 9, 4)))
+    other = repository.add(_build_cash_flow(portfolio_id=other_portfolio.id, flow_date=date(2026, 9, 2)))
+
+    result = repository.list_by_portfolio_between(
+        portfolio_id=portfolio.id,
+        start_date=date(2026, 9, 2),
+        end_date=date(2026, 9, 3),
+    )
+
+    result_ids = [cash_flow.id for cash_flow in result]
+    assert result_ids == [start.id, end_first.id, end_second.id]
+    assert before.id not in result_ids
+    assert after.id not in result_ids
+    assert other.id not in result_ids
