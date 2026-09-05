@@ -348,3 +348,20 @@ def test_benchmark_price_repository_missing_historical_price_returns_none(
     )
 
     assert result is None
+
+
+def test_benchmark_repository_get_active_by_code_excludes_inactive(db_session: Session) -> None:
+    repository = BenchmarkRepository(db_session)
+    active = repository.add(_build_benchmark(code="ACTIVE", provider_symbol="ACTIVE"))
+    repository.add(
+        _build_benchmark(
+            code="INACTIVE",
+            name="Inactive Benchmark",
+            provider_symbol="INACTIVE",
+            is_active=False,
+        )
+    )
+
+    assert repository.get_active_by_code("ACTIVE") is active
+    assert repository.get_active_by_code("INACTIVE") is None
+    assert repository.get_active_by_code("UNKNOWN") is None

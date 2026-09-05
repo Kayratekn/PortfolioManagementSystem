@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from src.config.database import get_db_session
 from src.config.settings import get_settings
 from src.repositories.asset_repository import AssetRepository
+from src.repositories.benchmark_price_repository import BenchmarkPriceRepository
+from src.repositories.benchmark_repository import BenchmarkRepository
 from src.repositories.exchange_rate_repository import ExchangeRateRepository
 from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
@@ -18,6 +20,7 @@ from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyData
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
 from src.services.asset_service import AssetService
+from src.services.benchmark_comparison_service import BenchmarkComparisonService
 from src.services.cost_basis_service import CostBasisService
 from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
@@ -68,6 +71,14 @@ def get_portfolio_cash_flow_repository(
 def get_exchange_rate_repository(db: Annotated[Session, Depends(get_db)]) -> ExchangeRateRepository:
     return ExchangeRateRepository(db)
 
+def get_benchmark_repository(db: Annotated[Session, Depends(get_db)]) -> BenchmarkRepository:
+    return BenchmarkRepository(db)
+
+
+def get_benchmark_price_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> BenchmarkPriceRepository:
+    return BenchmarkPriceRepository(db)
 
 def get_tefas_fund_allocation_data_repository(
     db: Annotated[Session, Depends(get_db)],
@@ -285,6 +296,31 @@ def get_portfolio_performance_service(
         portfolio_valuation_service=portfolio_valuation_service,
     )
 
+
+def get_benchmark_comparison_service(
+    benchmark_repository: Annotated[
+        BenchmarkRepository,
+        Depends(get_benchmark_repository),
+    ],
+    benchmark_price_repository: Annotated[
+        BenchmarkPriceRepository,
+        Depends(get_benchmark_price_repository),
+    ],
+    fx_conversion_service: Annotated[
+        FxConversionService,
+        Depends(get_fx_conversion_service),
+    ],
+    portfolio_performance_service: Annotated[
+        PortfolioPerformanceService,
+        Depends(get_portfolio_performance_service),
+    ],
+) -> BenchmarkComparisonService:
+    return BenchmarkComparisonService(
+        benchmark_repository=benchmark_repository,
+        benchmark_price_repository=benchmark_price_repository,
+        fx_conversion_service=fx_conversion_service,
+        portfolio_performance_service=portfolio_performance_service,
+    )
 def get_tefas_fund_allocation_read_service(
     asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
     allocation_repository: Annotated[
