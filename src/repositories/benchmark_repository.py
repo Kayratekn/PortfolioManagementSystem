@@ -22,6 +22,13 @@ class BenchmarkRepository:
         statement = select(Benchmark).where(Benchmark.code == code)
         return self.db.scalar(statement)
 
+    def get_by_provider_symbol(self, *, provider: str, provider_symbol: str) -> Benchmark | None:
+        statement = select(Benchmark).where(
+            Benchmark.provider == provider,
+            Benchmark.provider_symbol == provider_symbol,
+        )
+        return self.db.scalar(statement)
+
     def get_active_by_code(self, code: str) -> Benchmark | None:
         statement = select(Benchmark).where(
             Benchmark.code == code,
