@@ -20,6 +20,7 @@ from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyData
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
 from src.services.asset_service import AssetService
+from src.services.benchmark_catalog_service import BenchmarkCatalogService
 from src.services.benchmark_comparison_service import BenchmarkComparisonService
 from src.services.cost_basis_service import CostBasisService
 from src.services.fx_conversion_service import FxConversionService
@@ -295,6 +296,15 @@ def get_portfolio_performance_service(
         fx_conversion_service=fx_conversion_service,
         portfolio_valuation_service=portfolio_valuation_service,
     )
+
+
+def get_benchmark_catalog_service(
+    benchmark_repository: Annotated[
+        BenchmarkRepository,
+        Depends(get_benchmark_repository),
+    ],
+) -> BenchmarkCatalogService:
+    return BenchmarkCatalogService(benchmark_repository)
 
 
 def get_benchmark_comparison_service(
