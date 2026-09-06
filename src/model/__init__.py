@@ -13,6 +13,7 @@ from . import (
     tefas_management_fee_history,
     transaction,
     user,
+    watchlist_item,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "tefas_management_fee_history",
     "transaction",
     "user",
+    "watchlist_item",
 ]

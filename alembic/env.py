@@ -12,6 +12,7 @@ from src.model import portfolio  # noqa: F401
 from src.model import tefas_fetch_log  # noqa: F401
 from src.model import tefas_fund_daily_data  # noqa: F401
 from src.model import user  # noqa: F401
+from src.model import watchlist_item  # noqa: F401
 
 
 config = context.config
