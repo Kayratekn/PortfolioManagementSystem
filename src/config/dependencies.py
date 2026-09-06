@@ -14,6 +14,7 @@ from src.repositories.benchmark_price_repository import BenchmarkPriceRepository
 from src.repositories.benchmark_repository import BenchmarkRepository
 from src.repositories.data_sync_run_repository import DataSyncRunRepository
 from src.repositories.exchange_rate_repository import ExchangeRateRepository
+from src.repositories.note_repository import NoteRepository
 from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
@@ -28,6 +29,7 @@ from src.services.cost_basis_service import CostBasisService
 from src.services.data_sync_run_service import DataSyncRunService
 from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
+from src.services.note_service import NoteService
 from src.services.portfolio_cash_flow_service import PortfolioCashFlowService
 from src.services.portfolio_cash_replay_service import PortfolioCashReplayService
 from src.services.portfolio_performance_service import PortfolioPerformanceService
@@ -57,6 +59,10 @@ def get_user_repository(db: Annotated[Session, Depends(get_db)]) -> UserReposito
 
 def get_portfolio_repository(db: Annotated[Session, Depends(get_db)]) -> PortfolioRepository:
     return PortfolioRepository(db)
+
+
+def get_note_repository(db: Annotated[Session, Depends(get_db)]) -> NoteRepository:
+    return NoteRepository(db)
 
 
 def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetRepository:
@@ -132,6 +138,18 @@ def get_asset_service(
     asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
 ) -> AssetService:
     return AssetService(asset_repository)
+
+
+def get_note_service(
+    db: Annotated[Session, Depends(get_db)],
+    note_repository: Annotated[NoteRepository, Depends(get_note_repository)],
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+) -> NoteService:
+    return NoteService(
+        db=db,
+        note_repository=note_repository,
+        portfolio_repository=portfolio_repository,
+    )
 
 
 def get_watchlist_service(

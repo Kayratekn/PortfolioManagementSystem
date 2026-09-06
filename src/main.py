@@ -18,6 +18,7 @@ from src.controller.cost_basis_controller import router as cost_basis_router
 from src.controller.data_sync_status_controller import router as data_sync_status_router
 from src.controller.health_controller import router as health_router
 from src.controller.holding_controller import router as holding_router
+from src.controller.note_controller import router as note_router
 from src.controller.portfolio_cash_flow_controller import router as portfolio_cash_flow_router
 from src.controller.portfolio_controller import router as portfolio_router
 from src.controller.portfolio_valuation_controller import router as portfolio_valuation_router
@@ -39,6 +40,7 @@ app.include_router(portfolio_router)
 app.include_router(portfolio_cash_flow_router)
 app.include_router(transaction_router)
 app.include_router(watchlist_router)
+app.include_router(note_router)
 app.include_router(holding_router)
 app.include_router(portfolio_valuation_router)
 app.include_router(portfolio_performance_router)

@@ -468,6 +468,14 @@ Important verified checkpoints include:
 - Real PostgreSQL + scheduler audit + actual FastAPI status HTTP smoke: **PASS**. It verified TEFAS success auditing, benchmark partial-failure continuation, safe generic failure persistence, unauthenticated HTTP 401, authenticated HTTP 200, latest-per-type ordering, exact public fields and outer-transaction rollback cleanup with zero smoke rows surviving.
 - Current full backend suite after DataSyncRun v1: **1497 passed in 25.31s**.
 - `python -m compileall src scripts alembic` and `git diff --check` passed for DataSyncRun v1.
+- Notes v1 is implemented with migration `20260907_0020`, following `20260907_0019`. Notes are authenticated user-owned portfolio notes with required `user_id`, `portfolio_id` and `note_text`; no asset/transaction linkage, title, tags, soft delete, PATCH or DELETE behavior was added.
+- Notes API provides authenticated `POST /api/v1/notes` and `GET /api/v1/notes`. Create validates portfolio ownership through the existing active-portfolio ownership path, returns HTTP 404 for missing/foreign/deleted portfolios, trims note text and accepts 1-2000 characters. Listing is user-isolated and ordered by `created_at DESC, id DESC` with pagination.
+- Existing notes remain persisted and listable after their portfolio is soft-deleted, while new notes cannot be created for a deleted portfolio.
+- Notes migration `20260907_0020` was applied successfully on real PostgreSQL; `alembic current` reports `20260907_0020 (head)`.
+- Focused Notes suite: **26 passed**; Notes plus relevant Portfolio/Auth regression: **51 passed**.
+- Real PostgreSQL + actual FastAPI Notes HTTP smoke: **PASS**. It verified unauthenticated HTTP 401, cross-user portfolio isolation with HTTP 404, owner create with HTTP 201, exact public fields, trimmed text, deterministic listing/pagination, user isolation, deleted-portfolio create rejection, preservation of existing notes after portfolio deletion, and outer-transaction rollback cleanup with zero smoke rows surviving.
+- Current full backend suite after Notes v1: **1523 passed in 29.10s**.
+- `python -m compileall src alembic` and `git diff --check` passed for Notes v1.
 
 ## Recent Git milestones
 
@@ -500,7 +508,7 @@ Final high-level classification:
 
 Work in small controlled increments. The TEFAS backend data foundation is complete; remaining provider-specific items stay pending unless a concrete product requirement makes them necessary.
 
-Benchmark backend implementation is complete and validated, including provider-independent storage/import, real BIST100/SP500/NASDAQ100 historical data, Benchmark Comparison, Benchmark Catalog and completed-close daily Yahoo Finance synchronization. The remaining benchmark step is operational only: coordinate the external one-shot scheduler with the data-integration environment used for the project's daily TEFAS jobs and verify an actual scheduled run. Watchlist v1 and DataSyncRun / synchronization-status auditing v1 are now implemented and validated end-to-end. The next controlled backend scope item is Notes; its exact ownership and API contract should be confirmed through focused discovery before implementation.
+Benchmark backend implementation is complete and validated, including provider-independent storage/import, real BIST100/SP500/NASDAQ100 historical data, Benchmark Comparison, Benchmark Catalog and completed-close daily Yahoo Finance synchronization. The remaining benchmark step is operational only: coordinate the external one-shot scheduler with the data-integration environment used for the project's daily TEFAS jobs and verify an actual scheduled run. Watchlist v1, DataSyncRun / synchronization-status auditing v1 and Notes v1 are now implemented and validated end-to-end. The next controlled backend scope item is the generic AssetPrice / precious-metal market-data contract. Perform focused discovery first to determine the real requirement, provider ownership and overlap with the existing TEFAS valuation-price and BenchmarkPrice foundations before implementing anything.
 
 ## Current open decisions / remaining data gaps
 
