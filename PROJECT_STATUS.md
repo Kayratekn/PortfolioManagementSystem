@@ -452,6 +452,9 @@ Important verified checkpoints include:
 - Current full backend suite after Benchmark Daily Scheduled Sync + completed-close finality: **1444 passed in 23.35s**.
 - `python -m compileall src scripts` and `git diff --check` passed after Benchmark Daily Sync finality fixes.
 
+- Real weekend/holiday Benchmark Daily Sync smoke on 2026-09-06: **PASS**; Yahoo/yfinance returned stale 2026-09-04 rows for all three supported benchmarks despite the requested `[2026-09-05, 2026-09-06)` range. The Yahoo client now ignores pre-start stale observations before Close canonicalization, still rejects `price_date >= end_date`, and the scheduled run completed as a clean no-op for BIST100, SP500 and NASDAQ100 with `fetched_rows=0`, `rows_created=0`, `rows_updated=0`.
+- Current full backend suite after the Yahoo weekend/holiday stale-row no-op fix: **1449 passed in 23.35s**.
+
 ## Recent Git milestones
 
 - **PR #29** — short-term evolution metrics; merged.

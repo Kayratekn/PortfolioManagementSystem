@@ -238,6 +238,115 @@ def test_fetch_daily_close_does_not_fabricate_missing_weekend_or_holiday_dates(
     ]
 
 
+def test_fetch_daily_close_ignores_stale_pre_start_yahoo_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_yfinance(
+        monkeypatch,
+        FakeDataFrame(_series([(date(2026, 9, 4), "100")])),
+    )
+
+    observations = YahooFinanceBenchmarkClient().fetch_daily_close(
+        symbol="^GSPC",
+        start_date=date(2026, 9, 5),
+        end_date=date(2026, 9, 6),
+    )
+
+    assert observations == []
+
+
+def test_fetch_daily_close_returns_empty_when_all_rows_are_stale_pre_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_yfinance(
+        monkeypatch,
+        FakeDataFrame(
+            _series(
+                [
+                    (date(2026, 9, 3), "99"),
+                    (date(2026, 9, 4), "100"),
+                ]
+            )
+        ),
+    )
+
+    observations = YahooFinanceBenchmarkClient().fetch_daily_close(
+        symbol="XU100.IS",
+        start_date=date(2026, 9, 5),
+        end_date=date(2026, 9, 6),
+    )
+
+    assert observations == []
+
+
+def test_fetch_daily_close_keeps_valid_rows_when_stale_rows_are_also_returned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_yfinance(
+        monkeypatch,
+        FakeDataFrame(
+            _series(
+                [
+                    (date(2026, 9, 4), "100"),
+                    (date(2026, 9, 8), "104.123456785"),
+                ]
+            )
+        ),
+    )
+
+    observations = YahooFinanceBenchmarkClient().fetch_daily_close(
+        symbol="^NDX",
+        start_date=date(2026, 9, 5),
+        end_date=date(2026, 9, 9),
+    )
+
+    assert [(item.price_date, item.close_value) for item in observations] == [
+        (date(2026, 9, 8), Decimal("104.12345679")),
+    ]
+
+
+def test_fetch_daily_close_raises_for_end_date_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_yfinance(
+        monkeypatch,
+        FakeDataFrame(_series([(date(2026, 9, 6), "101")])),
+    )
+
+    with pytest.raises(ValueError, match="end-exclusive range"):
+        YahooFinanceBenchmarkClient().fetch_daily_close(
+            symbol="^GSPC",
+            start_date=date(2026, 9, 5),
+            end_date=date(2026, 9, 6),
+        )
+
+
+def test_fetch_daily_close_ignores_malformed_stale_pre_start_close_before_canonicalization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_yfinance(
+        monkeypatch,
+        FakeDataFrame(
+            _series(
+                [
+                    (date(2026, 9, 4), "not-a-decimal"),
+                    (date(2026, 9, 8), "104"),
+                ]
+            )
+        ),
+    )
+
+    observations = YahooFinanceBenchmarkClient().fetch_daily_close(
+        symbol="XU100.IS",
+        start_date=date(2026, 9, 5),
+        end_date=date(2026, 9, 9),
+    )
+
+    assert [(item.price_date, item.close_value) for item in observations] == [
+        (date(2026, 9, 8), Decimal("104.00000000")),
+    ]
+
+
 def test_fetch_daily_close_accepts_single_ticker_multiindex_close_shape(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

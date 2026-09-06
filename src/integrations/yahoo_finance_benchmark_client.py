@@ -35,6 +35,15 @@ class YahooFinanceBenchmarkClient:
         observations: list[BenchmarkPriceObservation] = []
         for raw_date, raw_close in close_values.items():
             price_date = self._to_date(raw_date)
+            if price_date < start_date:
+                continue
+            if price_date >= end_date:
+                raise ValueError(
+                    "Yahoo Finance observation violates end-exclusive range: "
+                    f"price_date={price_date.isoformat()}, "
+                    f"range=[{start_date.isoformat()}, {end_date.isoformat()})."
+                )
+
             close_value = self._canonical_close(raw_close)
             observations.append(BenchmarkPriceObservation(price_date, close_value))
 
