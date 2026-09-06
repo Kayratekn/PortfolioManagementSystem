@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import argparse
 import sys
@@ -11,6 +11,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts import sync_tefas_daily
+from src.config.database import SessionLocal
+from src.repositories.data_sync_run_repository import DataSyncRunRepository
+from src.services.data_sync_run_service import DataSyncRunService, SYNC_TYPE_TEFAS_DAILY
 
 
 def previous_business_day(reference_date: date) -> date:
@@ -20,10 +23,16 @@ def previous_business_day(reference_date: date) -> date:
     return selected_date
 
 
-
 def current_date() -> date:
     return date.today()
 
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def build_data_sync_run_service(db) -> DataSyncRunService:
+    return DataSyncRunService(db=db, repository=DataSyncRunRepository(db))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,14 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-
 def select_data_date(*, reference_date: date, date_mode: str) -> date:
     if date_mode == "previous-business-day":
         return previous_business_day(reference_date)
     if date_mode == "today":
         return reference_date
     raise ValueError(f"Unsupported date mode: {date_mode}")
-
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -69,22 +76,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"fund kinds: {', '.join(selected_fund_kinds)}")
     print(f"fund code: {args.fund_code}")
 
-    final_exit_code = 0
-    for fund_kind in selected_fund_kinds:
-        daily_arguments = [
-            "--kind",
-            fund_kind,
-            "--date",
-            selected_data_date.isoformat(),
-        ]
-        if args.fund_code is not None:
-            daily_arguments.extend(["--fund-code", args.fund_code])
+    audit_db = SessionLocal()
+    try:
+        audit_service = build_data_sync_run_service(audit_db)
+        run_id = audit_service.start(SYNC_TYPE_TEFAS_DAILY, utc_now())
 
-        exit_code = sync_tefas_daily.main(daily_arguments)
-        if exit_code != 0:
-            final_exit_code = 1
+        final_exit_code = 0
+        for fund_kind in selected_fund_kinds:
+            daily_arguments = [
+                "--kind",
+                fund_kind,
+                "--date",
+                selected_data_date.isoformat(),
+            ]
+            if args.fund_code is not None:
+                daily_arguments.extend(["--fund-code", args.fund_code])
 
-    return final_exit_code
+            exit_code = sync_tefas_daily.main(daily_arguments)
+            if exit_code != 0:
+                final_exit_code = 1
+
+        if final_exit_code == 0:
+            audit_service.mark_success(run_id, utc_now())
+        else:
+            audit_service.mark_failed(
+                run_id,
+                "One or more TEFAS syncs failed.",
+                utc_now(),
+            )
+        return final_exit_code
+    finally:
+        audit_db.close()
 
 
 if __name__ == "__main__":

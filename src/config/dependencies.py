@@ -12,6 +12,7 @@ from src.config.settings import get_settings
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.benchmark_price_repository import BenchmarkPriceRepository
 from src.repositories.benchmark_repository import BenchmarkRepository
+from src.repositories.data_sync_run_repository import DataSyncRunRepository
 from src.repositories.exchange_rate_repository import ExchangeRateRepository
 from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
@@ -24,6 +25,7 @@ from src.services.asset_service import AssetService
 from src.services.benchmark_catalog_service import BenchmarkCatalogService
 from src.services.benchmark_comparison_service import BenchmarkComparisonService
 from src.services.cost_basis_service import CostBasisService
+from src.services.data_sync_run_service import DataSyncRunService
 from src.services.fx_conversion_service import FxConversionService
 from src.services.holding_service import HoldingService
 from src.services.portfolio_cash_flow_service import PortfolioCashFlowService
@@ -77,6 +79,12 @@ def get_portfolio_cash_flow_repository(
 
 def get_exchange_rate_repository(db: Annotated[Session, Depends(get_db)]) -> ExchangeRateRepository:
     return ExchangeRateRepository(db)
+
+
+def get_data_sync_run_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> DataSyncRunRepository:
+    return DataSyncRunRepository(db)
 
 def get_benchmark_repository(db: Annotated[Session, Depends(get_db)]) -> BenchmarkRepository:
     return BenchmarkRepository(db)
@@ -317,6 +325,16 @@ def get_portfolio_performance_service(
         fx_conversion_service=fx_conversion_service,
         portfolio_valuation_service=portfolio_valuation_service,
     )
+
+
+def get_data_sync_run_service(
+    db: Annotated[Session, Depends(get_db)],
+    data_sync_run_repository: Annotated[
+        DataSyncRunRepository,
+        Depends(get_data_sync_run_repository),
+    ],
+) -> DataSyncRunService:
+    return DataSyncRunService(db=db, repository=data_sync_run_repository)
 
 
 def get_benchmark_catalog_service(

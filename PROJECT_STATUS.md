@@ -460,6 +460,14 @@ Important verified checkpoints include:
 - Real PostgreSQL + actual FastAPI Watchlist HTTP smoke: **PASS**. It verified authenticated create/list/delete, exact public response fields, same-user duplicate rejection with HTTP 409, same asset allowed for different users, ownership-isolated listing, cross-user delete isolation with HTTP 404, owner delete with HTTP 204, and outer-transaction rollback cleanup with zero smoke rows surviving.
 - Current full backend suite after Watchlist v1: **1472 passed in 25.28s**.
 - `python -m compileall src alembic` and `git diff --check` passed for Watchlist v1.
+- DataSyncRun / synchronization-status auditing v1 is implemented with migration `20260907_0019`, following `20260907_0018`. The generic `data_sync_runs` table records scheduler-level `TEFAS_DAILY` and `BENCHMARK_DAILY` runs as `RUNNING`, `SUCCESS` or `FAILED`; the existing detailed `TefasFetchLog` remains unchanged.
+- Scheduled TEFAS and benchmark entry points now create exactly one durable DataSyncRun per invocation using a separate audit database session. Existing child-job continuation and data-import semantics are preserved, and failed runs persist only safe generic error messages.
+- Authenticated `GET /api/v1/data-sync/status` returns the latest persisted run for each supported sync type in deterministic TEFAS-then-Benchmark order and performs no provider calls.
+- DataSyncRun migration `20260907_0019` was applied successfully on real PostgreSQL; `alembic current` reports `20260907_0019 (head)`.
+- Focused DataSyncRun, scheduler and relevant TefasFetchLog regression: **63 passed**.
+- Real PostgreSQL + scheduler audit + actual FastAPI status HTTP smoke: **PASS**. It verified TEFAS success auditing, benchmark partial-failure continuation, safe generic failure persistence, unauthenticated HTTP 401, authenticated HTTP 200, latest-per-type ordering, exact public fields and outer-transaction rollback cleanup with zero smoke rows surviving.
+- Current full backend suite after DataSyncRun v1: **1497 passed in 25.31s**.
+- `python -m compileall src scripts alembic` and `git diff --check` passed for DataSyncRun v1.
 
 ## Recent Git milestones
 
@@ -492,7 +500,7 @@ Final high-level classification:
 
 Work in small controlled increments. The TEFAS backend data foundation is complete; remaining provider-specific items stay pending unless a concrete product requirement makes them necessary.
 
-Benchmark backend implementation is complete and validated, including provider-independent storage/import, real BIST100/SP500/NASDAQ100 historical data, Benchmark Comparison, Benchmark Catalog and completed-close daily Yahoo Finance synchronization. The remaining benchmark step is operational only: coordinate the external one-shot scheduler with the data-integration environment used for the project's daily TEFAS jobs and verify an actual scheduled run. Watchlist v1 is now also implemented and validated end-to-end. The next controlled backend scope item is DataSyncRun / synchronization-status auditing so scheduled TEFAS and benchmark data jobs can expose durable run status without changing their existing data semantics.
+Benchmark backend implementation is complete and validated, including provider-independent storage/import, real BIST100/SP500/NASDAQ100 historical data, Benchmark Comparison, Benchmark Catalog and completed-close daily Yahoo Finance synchronization. The remaining benchmark step is operational only: coordinate the external one-shot scheduler with the data-integration environment used for the project's daily TEFAS jobs and verify an actual scheduled run. Watchlist v1 and DataSyncRun / synchronization-status auditing v1 are now implemented and validated end-to-end. The next controlled backend scope item is Notes; its exact ownership and API contract should be confirmed through focused discovery before implementation.
 
 ## Current open decisions / remaining data gaps
 
