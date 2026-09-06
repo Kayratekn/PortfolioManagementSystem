@@ -12,7 +12,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.config.database import SessionLocal
 from src.config.supported_benchmarks import SUPPORTED_BENCHMARKS
+from src.repositories.data_sync_run_repository import DataSyncRunRepository
 from src.services.benchmark_daily_sync_service import BenchmarkDailySyncService
+from src.services.data_sync_run_service import DataSyncRunService, SYNC_TYPE_BENCHMARK_DAILY
 
 
 ISTANBUL_TIMEZONE = timezone(timedelta(hours=3), "Europe/Istanbul")
@@ -23,6 +25,14 @@ def current_date(now: datetime | None = None) -> date:
     if reference_time.tzinfo is None:
         raise ValueError("current_date requires an aware datetime when now is supplied.")
     return reference_time.astimezone(ISTANBUL_TIMEZONE).date()
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def build_data_sync_run_service(db) -> DataSyncRunService:
+    return DataSyncRunService(db=db, repository=DataSyncRunRepository(db))
 
 
 def parse_iso_date(value: str) -> date:
@@ -55,29 +65,45 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"reference_date: {reference_date.isoformat()}")
     print(f"benchmark_codes: {', '.join(benchmark_codes)}")
 
-    failed = False
-    for benchmark_code in benchmark_codes:
-        db = SessionLocal()
-        try:
-            result = BenchmarkDailySyncService(db).sync(
-                benchmark_code=benchmark_code,
-                reference_date=reference_date,
-            )
-            print(
-                f"{benchmark_code}: ok "
-                f"symbol={result.provider_symbol} "
-                f"range=[{result.start_date.isoformat()}, {result.end_date.isoformat()}) "
-                f"fetched_rows={result.fetched_rows} "
-                f"rows_created={result.rows_created} "
-                f"rows_updated={result.rows_updated}"
-            )
-        except Exception as exc:
-            failed = True
-            print(f"{benchmark_code}: failed {exc}", file=sys.stderr)
-        finally:
-            db.close()
+    audit_db = SessionLocal()
+    try:
+        audit_service = build_data_sync_run_service(audit_db)
+        run_id = audit_service.start(SYNC_TYPE_BENCHMARK_DAILY, utc_now())
 
-    return 1 if failed else 0
+        failed = False
+        for benchmark_code in benchmark_codes:
+            db = SessionLocal()
+            try:
+                result = BenchmarkDailySyncService(db).sync(
+                    benchmark_code=benchmark_code,
+                    reference_date=reference_date,
+                )
+                print(
+                    f"{benchmark_code}: ok "
+                    f"symbol={result.provider_symbol} "
+                    f"range=[{result.start_date.isoformat()}, {result.end_date.isoformat()}) "
+                    f"fetched_rows={result.fetched_rows} "
+                    f"rows_created={result.rows_created} "
+                    f"rows_updated={result.rows_updated}"
+                )
+            except Exception as exc:
+                failed = True
+                print(f"{benchmark_code}: failed {exc}", file=sys.stderr)
+            finally:
+                db.close()
+
+        if failed:
+            audit_service.mark_failed(
+                run_id,
+                "One or more benchmark syncs failed.",
+                utc_now(),
+            )
+            return 1
+
+        audit_service.mark_success(run_id, utc_now())
+        return 0
+    finally:
+        audit_db.close()
 
 
 if __name__ == "__main__":
