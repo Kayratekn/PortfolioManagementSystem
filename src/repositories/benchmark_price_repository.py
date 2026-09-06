@@ -63,3 +63,12 @@ class BenchmarkPriceRepository:
             .limit(1)
         )
         return self.db.scalar(statement)
+
+    def get_latest_by_benchmark(self, *, benchmark_id: int) -> BenchmarkPrice | None:
+        statement = (
+            select(BenchmarkPrice)
+            .where(BenchmarkPrice.benchmark_id == benchmark_id)
+            .order_by(BenchmarkPrice.price_date.desc(), BenchmarkPrice.id.desc())
+            .limit(1)
+        )
+        return self.db.scalar(statement)
