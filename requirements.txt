@@ -9,3 +9,4 @@ python-dotenv
 email-validator
 pytest
 httpx
+yfinance
