@@ -29,6 +29,34 @@ BIST100_BENCHMARK = SupportedBenchmark(
 )
 
 
+SP500_BENCHMARK = SupportedBenchmark(
+    code="SP500",
+    name="S&P 500",
+    benchmark_type="MARKET_INDEX",
+    native_currency="USD",
+    index_owner="SP_DOW_JONES_INDICES",
+    return_type="PRICE_RETURN",
+    provider="YAHOO_FINANCE",
+    provider_symbol="^GSPC",
+    is_active=True,
+)
+
+
+NASDAQ100_BENCHMARK = SupportedBenchmark(
+    code="NASDAQ100",
+    name="NASDAQ-100",
+    benchmark_type="MARKET_INDEX",
+    native_currency="USD",
+    index_owner="NASDAQ",
+    return_type="PRICE_RETURN",
+    provider="YAHOO_FINANCE",
+    provider_symbol="^NDX",
+    is_active=True,
+)
+
+
 SUPPORTED_BENCHMARKS: dict[str, SupportedBenchmark] = {
     BIST100_BENCHMARK.code: BIST100_BENCHMARK,
+    SP500_BENCHMARK.code: SP500_BENCHMARK,
+    NASDAQ100_BENCHMARK.code: NASDAQ100_BENCHMARK,
 }

@@ -7,7 +7,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.config.supported_benchmarks import BIST100_BENCHMARK, SUPPORTED_BENCHMARKS
+from src.config.supported_benchmarks import (
+    BIST100_BENCHMARK,
+    NASDAQ100_BENCHMARK,
+    SP500_BENCHMARK,
+    SUPPORTED_BENCHMARKS,
+    SupportedBenchmark,
+)
 from src.model.benchmark import Benchmark
 from src.repositories.benchmark_repository import BenchmarkRepository
 from src.services.benchmark_bootstrap_service import (
@@ -16,6 +22,59 @@ from src.services.benchmark_bootstrap_service import (
     BenchmarkBootstrapConflictError,
     BenchmarkBootstrapService,
 )
+
+
+EXPECTED_SUPPORTED_BENCHMARKS = {
+    "BIST100": BIST100_BENCHMARK,
+    "SP500": SP500_BENCHMARK,
+    "NASDAQ100": NASDAQ100_BENCHMARK,
+}
+
+
+LOCKED_BENCHMARK_METADATA = [
+    (
+        BIST100_BENCHMARK,
+        {
+            "code": "BIST100",
+            "name": "BIST 100",
+            "benchmark_type": "MARKET_INDEX",
+            "native_currency": "TRY",
+            "index_owner": "BORSA_ISTANBUL",
+            "return_type": "PRICE_RETURN",
+            "provider": "YAHOO_FINANCE",
+            "provider_symbol": "XU100.IS",
+            "is_active": True,
+        },
+    ),
+    (
+        SP500_BENCHMARK,
+        {
+            "code": "SP500",
+            "name": "S&P 500",
+            "benchmark_type": "MARKET_INDEX",
+            "native_currency": "USD",
+            "index_owner": "SP_DOW_JONES_INDICES",
+            "return_type": "PRICE_RETURN",
+            "provider": "YAHOO_FINANCE",
+            "provider_symbol": "^GSPC",
+            "is_active": True,
+        },
+    ),
+    (
+        NASDAQ100_BENCHMARK,
+        {
+            "code": "NASDAQ100",
+            "name": "NASDAQ-100",
+            "benchmark_type": "MARKET_INDEX",
+            "native_currency": "USD",
+            "index_owner": "NASDAQ",
+            "return_type": "PRICE_RETURN",
+            "provider": "YAHOO_FINANCE",
+            "provider_symbol": "^NDX",
+            "is_active": True,
+        },
+    ),
+]
 
 
 def _benchmarks(db_session: Session) -> list[Benchmark]:
@@ -42,33 +101,44 @@ def _add_existing(db_session: Session, **overrides: object) -> Benchmark:
     return benchmark
 
 
-def test_supported_registry_contains_exact_locked_bist100_metadata() -> None:
-    assert SUPPORTED_BENCHMARKS == {"BIST100": BIST100_BENCHMARK}
-    assert BIST100_BENCHMARK.code == "BIST100"
-    assert BIST100_BENCHMARK.name == "BIST 100"
-    assert BIST100_BENCHMARK.benchmark_type == "MARKET_INDEX"
-    assert BIST100_BENCHMARK.native_currency == "TRY"
-    assert BIST100_BENCHMARK.index_owner == "BORSA_ISTANBUL"
-    assert BIST100_BENCHMARK.return_type == "PRICE_RETURN"
-    assert BIST100_BENCHMARK.provider == "YAHOO_FINANCE"
-    assert BIST100_BENCHMARK.provider_symbol == "XU100.IS"
-    assert BIST100_BENCHMARK.is_active is True
+def _assert_benchmark_matches_locked_metadata(
+    benchmark: SupportedBenchmark | Benchmark,
+    expected: dict[str, object],
+) -> None:
+    assert benchmark.code == expected["code"]
+    assert benchmark.name == expected["name"]
+    assert benchmark.benchmark_type == expected["benchmark_type"]
+    assert benchmark.native_currency == expected["native_currency"]
+    assert benchmark.index_owner == expected["index_owner"]
+    assert benchmark.return_type == expected["return_type"]
+    assert benchmark.provider == expected["provider"]
+    assert benchmark.provider_symbol == expected["provider_symbol"]
+    assert benchmark.is_active is expected["is_active"]
 
 
-def test_bootstrap_creates_exact_bist100_metadata(db_session: Session) -> None:
-    result = BenchmarkBootstrapService(db_session).bootstrap(BIST100_BENCHMARK)
+def test_supported_registry_contains_all_supported_benchmarks() -> None:
+    assert SUPPORTED_BENCHMARKS == EXPECTED_SUPPORTED_BENCHMARKS
+
+
+@pytest.mark.parametrize(("metadata", "expected"), LOCKED_BENCHMARK_METADATA)
+def test_supported_registry_contains_exact_locked_metadata(
+    metadata: SupportedBenchmark,
+    expected: dict[str, object],
+) -> None:
+    assert SUPPORTED_BENCHMARKS[metadata.code] is metadata
+    _assert_benchmark_matches_locked_metadata(metadata, expected)
+
+
+@pytest.mark.parametrize(("metadata", "expected"), LOCKED_BENCHMARK_METADATA)
+def test_bootstrap_creates_exact_locked_metadata(
+    db_session: Session,
+    metadata: SupportedBenchmark,
+    expected: dict[str, object],
+) -> None:
+    result = BenchmarkBootstrapService(db_session).bootstrap(metadata)
 
     assert result.status == BENCHMARK_BOOTSTRAP_CREATED
-    benchmark = result.benchmark
-    assert benchmark.code == "BIST100"
-    assert benchmark.name == "BIST 100"
-    assert benchmark.benchmark_type == "MARKET_INDEX"
-    assert benchmark.native_currency == "TRY"
-    assert benchmark.index_owner == "BORSA_ISTANBUL"
-    assert benchmark.return_type == "PRICE_RETURN"
-    assert benchmark.provider == "YAHOO_FINANCE"
-    assert benchmark.provider_symbol == "XU100.IS"
-    assert benchmark.is_active is True
+    _assert_benchmark_matches_locked_metadata(result.benchmark, expected)
 
 
 def test_exact_rerun_is_idempotent_and_creates_no_duplicate(db_session: Session) -> None:
