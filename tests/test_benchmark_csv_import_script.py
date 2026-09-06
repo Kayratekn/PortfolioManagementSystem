@@ -9,7 +9,11 @@ import pytest
 from sqlalchemy.orm import Session
 
 from scripts import bootstrap_benchmarks, import_benchmark_prices
-from src.config.supported_benchmarks import BIST100_BENCHMARK
+from src.config.supported_benchmarks import (
+    BIST100_BENCHMARK,
+    NASDAQ100_BENCHMARK,
+    SP500_BENCHMARK,
+)
 from src.model.benchmark import Benchmark
 from src.model.benchmark_price import BenchmarkPrice
 from src.services.benchmark_price_import_parser import BenchmarkPriceObservation
@@ -106,21 +110,31 @@ def _add_bist100(db_session: Session, *, is_active: bool = True) -> Benchmark:
     return benchmark
 
 
+@pytest.mark.parametrize(
+    ("code", "metadata"),
+    [
+        ("BIST100", BIST100_BENCHMARK),
+        ("SP500", SP500_BENCHMARK),
+        ("NASDAQ100", NASDAQ100_BENCHMARK),
+    ],
+)
 def test_bootstrap_cli_calls_registry_metadata_and_prints_status(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    code: str,
+    metadata: object,
 ) -> None:
     session_factory = SessionFactory()
     monkeypatch.setattr(bootstrap_benchmarks, "SessionLocal", session_factory)
     monkeypatch.setattr(bootstrap_benchmarks, "BenchmarkBootstrapService", FakeBootstrapService)
 
-    exit_code = bootstrap_benchmarks.main(["--code", "BIST100"])
+    exit_code = bootstrap_benchmarks.main(["--code", code])
 
     captured = capsys.readouterr()
     assert exit_code == 0
     assert captured.out.strip() == "CREATED"
     assert FakeBootstrapService.instances[0].db is session_factory.sessions[0]
-    assert FakeBootstrapService.instances[0].calls == [BIST100_BENCHMARK]
+    assert FakeBootstrapService.instances[0].calls == [metadata]
     assert session_factory.sessions[0].closed is True
 
 
@@ -131,11 +145,11 @@ def test_bootstrap_cli_unknown_code_fails_before_session(
     session_factory = SessionFactory()
     monkeypatch.setattr(bootstrap_benchmarks, "SessionLocal", session_factory)
 
-    exit_code = bootstrap_benchmarks.main(["--code", "SP500"])
+    exit_code = bootstrap_benchmarks.main(["--code", "UNKNOWN"])
 
     captured = capsys.readouterr()
     assert exit_code == 1
-    assert "Unsupported benchmark code: SP500" in captured.err
+    assert "Unsupported benchmark code: UNKNOWN" in captured.err
     assert session_factory.sessions == []
 
 
