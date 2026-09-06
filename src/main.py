@@ -23,6 +23,7 @@ from src.controller.portfolio_valuation_controller import router as portfolio_va
 from src.controller.portfolio_performance_controller import router as portfolio_performance_router
 from src.controller.realized_pl_controller import router as realized_pl_router
 from src.controller.transaction_controller import router as transaction_router
+from src.controller.watchlist_controller import router as watchlist_router
 from src.controller.unrealized_pl_controller import router as unrealized_pl_router
 from src.controller.tefas_fund_controller import router as tefas_fund_router
 
@@ -36,6 +37,7 @@ app.include_router(asset_router)
 app.include_router(portfolio_router)
 app.include_router(portfolio_cash_flow_router)
 app.include_router(transaction_router)
+app.include_router(watchlist_router)
 app.include_router(holding_router)
 app.include_router(portfolio_valuation_router)
 app.include_router(portfolio_performance_router)

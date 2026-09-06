@@ -19,6 +19,7 @@ from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllo
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
+from src.repositories.watchlist_repository import WatchlistRepository
 from src.services.asset_service import AssetService
 from src.services.benchmark_catalog_service import BenchmarkCatalogService
 from src.services.benchmark_comparison_service import BenchmarkComparisonService
@@ -38,6 +39,7 @@ from src.services.token_service import TokenService
 from src.services.transaction_service import TransactionService
 from src.services.unrealized_pl_service import UnrealizedPlService
 from src.services.user_service import UserService
+from src.services.watchlist_service import WatchlistService
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -61,6 +63,10 @@ def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetReposi
 
 def get_transaction_repository(db: Annotated[Session, Depends(get_db)]) -> TransactionRepository:
     return TransactionRepository(db)
+
+
+def get_watchlist_repository(db: Annotated[Session, Depends(get_db)]) -> WatchlistRepository:
+    return WatchlistRepository(db)
 
 
 def get_portfolio_cash_flow_repository(
@@ -118,6 +124,21 @@ def get_asset_service(
     asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
 ) -> AssetService:
     return AssetService(asset_repository)
+
+
+def get_watchlist_service(
+    db: Annotated[Session, Depends(get_db)],
+    asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
+    watchlist_repository: Annotated[
+        WatchlistRepository,
+        Depends(get_watchlist_repository),
+    ],
+) -> WatchlistService:
+    return WatchlistService(
+        db=db,
+        asset_repository=asset_repository,
+        watchlist_repository=watchlist_repository,
+    )
 
 
 def get_transaction_service(
