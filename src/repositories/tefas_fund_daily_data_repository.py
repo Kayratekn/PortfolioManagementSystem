@@ -79,6 +79,26 @@ class TefasFundDailyDataRepository:
         )
         return list(self.db.scalars(statement))
 
+    def list_latest_on_or_before(
+        self,
+        *,
+        asset_id: int,
+        data_date: date,
+        limit: int,
+    ) -> list[TefasFundDailyData]:
+        if limit <= 0:
+            return []
+
+        statement = (
+            select(TefasFundDailyData)
+            .where(
+                TefasFundDailyData.asset_id == asset_id,
+                TefasFundDailyData.data_date <= data_date,
+            )
+            .order_by(TefasFundDailyData.data_date.desc(), TefasFundDailyData.id.desc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(statement))
     def get_latest_by_asset(self, *, asset_id: int) -> TefasFundDailyData | None:
         statement = (
             select(TefasFundDailyData)

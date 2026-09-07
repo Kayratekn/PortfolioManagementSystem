@@ -27,6 +27,7 @@ from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
 from src.repositories.watchlist_repository import WatchlistRepository
 from src.services.ai_analysis_persistence_service import AiAnalysisPersistenceService
+from src.services.ai_portfolio_analysis_service import AiPortfolioAnalysisService
 from src.services.asset_service import AssetService
 from src.services.benchmark_catalog_service import BenchmarkCatalogService
 from src.services.benchmark_comparison_service import BenchmarkComparisonService
@@ -155,6 +156,35 @@ def get_ai_client() -> AiClient:
         timeout_seconds=settings.ai_timeout_seconds,
     )
 
+
+def get_ai_portfolio_analysis_service(
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    transaction_repository: Annotated[
+        TransactionRepository,
+        Depends(get_transaction_repository),
+    ],
+    daily_data_repository: Annotated[
+        TefasFundDailyDataRepository,
+        Depends(get_tefas_fund_daily_data_repository),
+    ],
+    allocation_repository: Annotated[
+        TefasFundAllocationDataRepository,
+        Depends(get_tefas_fund_allocation_data_repository),
+    ],
+    ai_client: Annotated[AiClient, Depends(get_ai_client)],
+    persistence_service: Annotated[
+        AiAnalysisPersistenceService,
+        Depends(get_ai_analysis_persistence_service),
+    ],
+) -> AiPortfolioAnalysisService:
+    return AiPortfolioAnalysisService(
+        portfolio_repository=portfolio_repository,
+        transaction_repository=transaction_repository,
+        daily_data_repository=daily_data_repository,
+        allocation_repository=allocation_repository,
+        ai_client=ai_client,
+        persistence_service=persistence_service,
+    )
 
 def get_token_service() -> TokenService:
     settings = get_settings()
