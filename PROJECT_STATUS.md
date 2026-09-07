@@ -476,6 +476,15 @@ Important verified checkpoints include:
 - Real PostgreSQL + actual FastAPI Notes HTTP smoke: **PASS**. It verified unauthenticated HTTP 401, cross-user portfolio isolation with HTTP 404, owner create with HTTP 201, exact public fields, trimmed text, deterministic listing/pagination, user isolation, deleted-portfolio create rejection, preservation of existing notes after portfolio deletion, and outer-transaction rollback cleanup with zero smoke rows surviving.
 - Current full backend suite after Notes v1: **1523 passed in 29.10s**.
 - `python -m compileall src alembic` and `git diff --check` passed for Notes v1.
+- Generic AssetPrice storage foundation is implemented with migration `20260907_0021`, following `20260907_0020`. `AssetPrice` is a provider-independent historical price store for non-TEFAS assets, initially intended for precious-metal support; TEFAS prices remain canonical in `TefasFundDailyData` and benchmark prices remain canonical in `BenchmarkPrice`.
+- `asset_prices` stores required `asset_id`, `price_date`, Decimal `price` (`Numeric(20,8)`) and nonblank `source`. It enforces positive prices and uniqueness on `(asset_id, price_date, source)`.
+- AssetPrice repository lookups are explicitly source-aware. Latest-on-or-before never uses future observations; range queries are inclusive and deterministic. Repositories flush without committing.
+- AssetPrice foundation intentionally does not yet add provider clients, precious-metal seed rows, currency/unit inference, APIs, schedulers, valuation/P&L wiring, OHLC fields or persisted daily-return values.
+- AssetPrice migration `20260907_0021` was applied successfully on real PostgreSQL; `alembic current` reports `20260907_0021 (head)`.
+- Focused AssetPrice suite after provenance hardening: **19 passed**.
+- Real PostgreSQL AssetPrice smoke: **PASS**. It verified source-isolated historical lookup, future-price exclusion, source-isolated ranges, blank-source rejection, positive-price enforcement, duplicate `(asset_id, price_date, source)` rejection and outer-transaction rollback cleanup with zero smoke rows surviving.
+- Current full backend suite after AssetPrice foundation: **1542 passed in 27.15s**.
+- `python -m compileall src alembic` and `git diff --check` passed for AssetPrice foundation.
 
 ## Recent Git milestones
 
@@ -508,7 +517,7 @@ Final high-level classification:
 
 Work in small controlled increments. The TEFAS backend data foundation is complete; remaining provider-specific items stay pending unless a concrete product requirement makes them necessary.
 
-Benchmark backend implementation is complete and validated, including provider-independent storage/import, real BIST100/SP500/NASDAQ100 historical data, Benchmark Comparison, Benchmark Catalog and completed-close daily Yahoo Finance synchronization. The remaining benchmark step is operational only: coordinate the external one-shot scheduler with the data-integration environment used for the project's daily TEFAS jobs and verify an actual scheduled run. Watchlist v1, DataSyncRun / synchronization-status auditing v1 and Notes v1 are now implemented and validated end-to-end. The next controlled backend scope item is the generic AssetPrice / precious-metal market-data contract. Perform focused discovery first to determine the real requirement, provider ownership and overlap with the existing TEFAS valuation-price and BenchmarkPrice foundations before implementing anything.
+Benchmark backend implementation is complete and validated, including provider-independent storage/import, real BIST100/SP500/NASDAQ100 historical data, Benchmark Comparison, Benchmark Catalog and completed-close daily Yahoo Finance synchronization. The remaining benchmark step is operational only: coordinate the external one-shot scheduler with the data-integration environment used for the project's daily TEFAS jobs and verify an actual scheduled run. Watchlist v1, DataSyncRun / synchronization-status auditing v1, Notes v1 and the provider-independent generic AssetPrice storage foundation are now implemented and validated end-to-end. The next controlled backend scope is the precious-metal provider/data contract for gold, silver and platinum. Before provider integration or valuation wiring, verify with the data-integration owner the canonical provider/source, asset identifiers, native currency and price unit; do not infer these values in backend code.
 
 ## Current open decisions / remaining data gaps
 
