@@ -1,4 +1,5 @@
 from . import (
+    ai_analysis,
     asset_price,
     asset,
     benchmark,
@@ -21,6 +22,7 @@ from . import (
 )
 
 __all__ = [
+    "ai_analysis",
     "asset_price",
     "asset",
     "benchmark",

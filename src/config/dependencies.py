@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from src.config.database import get_db_session
 from src.config.settings import get_settings
 from src.integrations.ai_client import AiClient
+from src.repositories.ai_analysis_repository import AiAnalysisRepository
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.benchmark_price_repository import BenchmarkPriceRepository
 from src.repositories.benchmark_repository import BenchmarkRepository
@@ -25,6 +26,7 @@ from src.repositories.tefas_management_fee_history_repository import TefasManage
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
 from src.repositories.watchlist_repository import WatchlistRepository
+from src.services.ai_analysis_persistence_service import AiAnalysisPersistenceService
 from src.services.asset_service import AssetService
 from src.services.benchmark_catalog_service import BenchmarkCatalogService
 from src.services.benchmark_comparison_service import BenchmarkComparisonService
@@ -69,6 +71,10 @@ def get_portfolio_repository(db: Annotated[Session, Depends(get_db)]) -> Portfol
 
 def get_note_repository(db: Annotated[Session, Depends(get_db)]) -> NoteRepository:
     return NoteRepository(db)
+
+
+def get_ai_analysis_repository(db: Annotated[Session, Depends(get_db)]) -> AiAnalysisRepository:
+    return AiAnalysisRepository(db)
 
 
 def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetRepository:
@@ -130,6 +136,16 @@ def get_tefas_fund_daily_data_repository(
     db: Annotated[Session, Depends(get_db)],
 ) -> TefasFundDailyDataRepository:
     return TefasFundDailyDataRepository(db)
+
+
+def get_ai_analysis_persistence_service(
+    db: Annotated[Session, Depends(get_db)],
+    ai_analysis_repository: Annotated[
+        AiAnalysisRepository,
+        Depends(get_ai_analysis_repository),
+    ],
+) -> AiAnalysisPersistenceService:
+    return AiAnalysisPersistenceService(db=db, repository=ai_analysis_repository)
 
 
 def get_ai_client() -> AiClient:
