@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
 
 from src.config.settings import get_settings
 from src.controller.ai_portfolio_analysis_controller import router as ai_portfolio_analysis_router
+from src.controller.ai_robustness_controller import router as ai_robustness_router
 from src.controller.asset_controller import router as asset_router
 from src.controller.auth_controller import router as auth_router
 from src.controller.benchmark_catalog_controller import router as benchmark_catalog_router
@@ -44,6 +45,7 @@ app.add_middleware(
 )
 app.include_router(health_router)
 app.include_router(ai_portfolio_analysis_router)
+app.include_router(ai_robustness_router)
 app.include_router(auth_router)
 app.include_router(asset_router)
 app.include_router(portfolio_router)
