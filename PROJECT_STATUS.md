@@ -497,6 +497,16 @@ Important verified checkpoints include:
 - Current full backend suite after PortfolioSnapshot foundation: **1555 passed in 27.51s**.
 - `python -m compileall src alembic` and `git diff --check` passed for PortfolioSnapshot foundation.
 
+## CORS integration foundation
+
+- FastAPI CORS middleware is configured through `Settings.cors_allowed_origins`; local frontend origins default to `http://127.0.0.1:4173` and `http://localhost:4173`.
+- CORS uses an explicit origin allow-list rather than `*`, allows GET/POST/PATCH/DELETE and Authorization/Content-Type, and keeps `allow_credentials=False` for the current Bearer-token auth model.
+- `CORS_ALLOWED_ORIGINS` is documented in `.env.example` and can be overridden per environment.
+- Packaged Electron `app://local` behavior is intentionally not guessed; it will be verified during real desktop integration before another origin is allowed.
+- Focused CORS suite: **3 passed**; Auth/Portfolio/Asset/CORS regression: **35 passed**.
+- Real Uvicorn CORS preflight smoke: **PASS** for configured origin and rejection of an unconfigured origin.
+- Current full backend suite after CORS integration foundation: **1558 passed in 27.67s**.
+
 ## Recent Git milestones
 
 - **PR #29** — short-term evolution metrics; merged.
