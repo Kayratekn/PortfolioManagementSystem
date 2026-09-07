@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.config.database import get_db_session
 from src.config.settings import get_settings
+from src.integrations.ai_client import AiClient
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.benchmark_price_repository import BenchmarkPriceRepository
 from src.repositories.benchmark_repository import BenchmarkRepository
@@ -129,6 +130,14 @@ def get_tefas_fund_daily_data_repository(
     db: Annotated[Session, Depends(get_db)],
 ) -> TefasFundDailyDataRepository:
     return TefasFundDailyDataRepository(db)
+
+
+def get_ai_client() -> AiClient:
+    settings = get_settings()
+    return AiClient(
+        base_url=settings.ai_service_url,
+        timeout_seconds=settings.ai_timeout_seconds,
+    )
 
 
 def get_token_service() -> TokenService:
