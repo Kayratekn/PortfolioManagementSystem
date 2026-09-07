@@ -12,6 +12,7 @@ from src.model import asset_price  # noqa: F401
 from src.model import data_sync_run  # noqa: F401
 from src.model import note  # noqa: F401
 from src.model import portfolio  # noqa: F401
+from src.model import portfolio_snapshot  # noqa: F401
 from src.model import tefas_fetch_log  # noqa: F401
 from src.model import tefas_fund_daily_data  # noqa: F401
 from src.model import user  # noqa: F401
