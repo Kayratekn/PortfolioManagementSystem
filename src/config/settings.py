@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     tcmb_timeout_seconds: float = Field(default=30.0, gt=0)
     tcmb_max_retries: int = Field(default=3, ge=0)
     tcmb_retry_wait_seconds: float = Field(default=10.0, ge=0)
+    ai_service_url: str = Field(default="http://127.0.0.1:8001")
+    ai_timeout_seconds: float = Field(default=15.0, gt=0)
 
 
 @lru_cache

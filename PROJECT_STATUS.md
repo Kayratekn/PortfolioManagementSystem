@@ -720,3 +720,26 @@ Status: COMPLETE - 2026-09-07
 - Related management-fee/TEFAS read regression tests: 128 passed.
 - Full regression suite: 1609 passed.
 - Real PostgreSQL + Uvicorn HTTP smoke passed using temporary seeded YAT/current-fee data; authentication, Decimal preservation, provenance and missing-fund behavior were verified and all temporary smoke data was cleaned.
+
+## AI Integration Foundation
+
+Status: COMPLETE - 2026-09-07
+
+- Added backend configuration for the separate stateless AI service:
+  - `AI_SERVICE_URL=http://127.0.0.1:8001`
+  - `AI_TIMEOUT_SECONDS=15`
+- Added synchronous `AiClient` under `src/integrations/ai_client.py`.
+- Added generic JSON POST support for future backend-to-AI service calls.
+- Added AI integration error boundaries:
+  - `AiServiceUnavailableError` for network/timeout and AI 5xx failures.
+  - `AiServiceRequestError` for AI 4xx responses with preserved status code.
+  - `AiServiceResponseError` for invalid or non-object JSON responses.
+- The integration layer does not depend on FastAPI `HTTPException`.
+- Raw AI response bodies are not exposed through integration errors.
+- Automatic retries are intentionally not used for AI POST operations.
+- Added `get_ai_client()` dependency wiring using centralized settings.
+- No public backend AI route, AIAnalysis persistence, portfolio-analysis logic, DB migration, caching, service token, frontend work or AI business-specific request assembly was added.
+- Focused AI tests: 23 passed.
+- Related integration regression tests: 79 passed.
+- Full regression suite: 1632 passed.
+- `python -m compileall src alembic` and `git diff --check` passed.
