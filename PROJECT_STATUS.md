@@ -546,6 +546,21 @@ The following data/provider items remain intentionally unresolved or deferred. T
 - For BYF, observed evidence distinguishes general-info `fiyat` as calculated per-share fund value / NAV from `borsaBultenFiyat` as exchange-market price. Valuation v1 therefore uses persisted `exchange_bulletin_price` for BYF market valuation and does not silently fall back to NAV when that market price is unavailable.
 - TEFAS internal type codes observed through `fonTipiGetir` (`YAT -> F`, `EMK -> M`, `BYF -> N`, `GYF -> 1`, `GSYF -> 0`) are provider-internal metadata and are not persisted as user-facing business classifications. Business-level fund-type history continues to use `fonProfilDtyGetir.fonTuru`.
 
+## Remaining backend scope audit
+
+The current backend scope was re-audited after the PortfolioSnapshot storage foundation. Core portfolio tracking, transaction/cash replay, holdings, valuation, TWR/performance, benchmark comparison/catalog/sync, Watchlist, Notes, DataSyncRun, generic AssetPrice storage and PortfolioSnapshot storage are implemented and validated.
+
+Remaining backend work is intentionally separated as follows:
+
+- **BLOCKED - precious metals:** Gold, silver and platinum provider integration remains blocked until the data-integration owner confirms the canonical provider/source, provider identifiers, native currency and raw price unit. Backend must not infer these values. After that contract is confirmed, the remaining backend work is provider adapter/integration, historical and daily AssetPrice synchronization, and precious-metal valuation/P&L support.
+- **BACKEND TODO after precious-metal valuation:** PortfolioSnapshot generation remains pending. Snapshots must remain derived dated calculated results and must not replace Transaction, PortfolioCashFlow or dynamic historical valuation as source of truth. Multi-currency TRY/USD/EUR/GBP snapshot calculation semantics must be finalized before generation is wired.
+- **CROSS-TEAM / BACKEND TODO:** `AIAnalysis`, `ExpertSource`, `UserExpertSource`, `SentimentPost`, `ReportDocument` and `ReportChunk` remain unresolved planned entities. AI/sentiment/RAG algorithms and their data contracts belong to the AI workstream, but backend ownership, authorization, persistence, API contracts, upload validation and integration boundaries remain backend responsibilities once those contracts are known.
+- **OTHER TEAM / operational handoff:** External scheduling of the already implemented one-shot benchmark synchronization belongs to the shared data-integration runtime/environment and requires coordination rather than new benchmark-domain logic.
+- **INTENTIONALLY DEFERRED:** Unverified TEFAS metadata/field semantics, management-fee extensions without a concrete requirement, separate API-version module refactoring, and other provider-specific additions remain deferred rather than guessed.
+- **FINAL QA TODO:** Measure and document backend test coverage against the project requirement of at least 70% during final backend verification.
+
+No remaining planned entity should be silently dropped. Each unresolved item must eventually be implemented, explicitly assigned to another workstream with a documented backend contract, or intentionally deferred with a recorded reason.
+
 ## Local development commands
 
 On Windows PowerShell, prefer the project's venv Python explicitly when activation is unavailable:
