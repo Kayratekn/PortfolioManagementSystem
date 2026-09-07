@@ -807,3 +807,35 @@ Status: COMPLETE - 2026-09-07
 - `python -m compileall src alembic`, `git diff --check`, and Alembic head verification passed.
 - No migration was required; Alembic head remains `20260907_0023`.
 - Live backend-to-AI service HTTP acceptance is pending because the external AI service was not available on `127.0.0.1:8001`; this is an integration availability dependency, not a backend implementation blocker.
+
+## AI Robustness API
+
+Status: COMPLETE - 2026-09-07
+
+- Added authenticated `POST /api/v1/portfolios/{portfolio_id}/ai/robustness`.
+- Request accepts only `as_of_date`; frontend-supplied holdings, prices, allocations, risk profile, user ID, and other backend-SSOT fields are forbidden.
+- Portfolio ownership is verified before AI invocation.
+- Historical holdings are derived from transactions on or before `as_of_date`.
+- Version 1 supports persisted TEFAS fund holdings only and rejects unsupported held assets rather than silently omitting them.
+- Blank or ambiguous normalized TEFAS fund codes are rejected before AI invocation.
+- Risk profile is normalized to canonical AI values: `muhafazakar`, `dengeli`, or `agresif`; null/blank defaults to `dengeli`, and unknown nonblank values are rejected.
+- AI `assets` values are calculated from held quantity multiplied by latest persisted TEFAS NAV on or before `as_of_date`, using Decimal arithmetic internally.
+- Robustness does not require historical NAV series; only the latest persisted NAV on or before `as_of_date` is used.
+- Latest persisted TEFAS allocation snapshot on or before `as_of_date` is used when available.
+- Verified allocation percentage points are converted to AI fractions exactly once by dividing by 100.
+- Missing, invalid, or non-zero unverified allocation data causes that fund's optional breakdown to be omitted rather than sending partial or invalid data.
+- Backend invokes AI endpoint `/api/ai/robustness`.
+- Robustness AI payload contains only `user_id`, canonical `risk_profile`, backend-derived `assets`, and optional verified `asset_breakdowns`.
+- AI network/5xx failures map to 503; AI 4xx and invalid responses map to stable 502 responses without leaking raw AI errors.
+- AI responses are validated before persistence and public response.
+- `robustness_score_100` is validated in the inclusive 0..100 range.
+- Successful calls persist exactly one immutable `AIAnalysis` row with `analysis_type=robustness`.
+- Persisted structured result contains only `scenario_impacts`, `robustness_score_100`, and `verdict`; request inputs and arbitrary AI extras are not persisted.
+- Repeated successful analyses append separate immutable history rows.
+- GPT-5.5 High correctness review found blank normalized fund-code and score-range blockers; both were fixed and the High re-review passed with no blocking issues.
+- Focused AI Robustness tests: 49 passed.
+- Related AIAnalysis, Portfolio Analysis, and TEFAS allocation regression tests: 77 passed.
+- Full regression suite: 1749 passed.
+- `python -m compileall src alembic`, `git diff --check`, and Alembic head verification passed.
+- No migration was required; Alembic head remains `20260907_0023`.
+- Live backend-to-AI service HTTP acceptance remains pending until the external AI service is available; this is an integration availability dependency, not a backend implementation blocker.
