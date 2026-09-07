@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
@@ -38,6 +38,31 @@ class TefasFundAllocationDataRepository:
         )
         return list(self.db.scalars(statement))
 
+    def list_latest_on_or_before(
+        self,
+        *,
+        asset_id: int,
+        data_date: date,
+    ) -> list[TefasFundAllocationData]:
+        latest_date_subquery = (
+            select(TefasFundAllocationData.data_date)
+            .where(
+                TefasFundAllocationData.asset_id == asset_id,
+                TefasFundAllocationData.data_date <= data_date,
+            )
+            .order_by(TefasFundAllocationData.data_date.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        statement = (
+            select(TefasFundAllocationData)
+            .where(
+                TefasFundAllocationData.asset_id == asset_id,
+                TefasFundAllocationData.data_date == latest_date_subquery,
+            )
+            .order_by(TefasFundAllocationData.raw_field_name.asc(), TefasFundAllocationData.id.asc())
+        )
+        return list(self.db.scalars(statement))
     def delete_by_asset_and_date(
         self,
         *,
