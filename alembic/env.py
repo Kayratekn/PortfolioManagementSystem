@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 from src.config.settings import get_settings
 from src.model.base import Base
 from src.model import asset  # noqa: F401
+from src.model import asset_price  # noqa: F401
 from src.model import data_sync_run  # noqa: F401
 from src.model import note  # noqa: F401
 from src.model import portfolio  # noqa: F401
