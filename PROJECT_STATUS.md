@@ -617,3 +617,32 @@ Codex usage:
 - Use GPT-5.5 Medium for focused implementation work when Codex materially helps.
 - Use GPT-5.5 High only for genuinely critical correctness review.
 - Keep Codex prompts short and task-specific.
+
+## TEFAS Read / History API
+
+Status: COMPLETE — 2026-09-07
+
+- Added authenticated public TEFAS daily-data read endpoints:
+  - `GET /api/v1/tefas/funds/{fund_code}/latest`
+  - `GET /api/v1/tefas/funds/{fund_code}/history?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`
+- Reads only already persisted `TefasFundDailyData`; no provider/network fetch or sync is triggered by these endpoints.
+- Fund codes are normalized with `strip().upper()`.
+- Latest returns the newest deterministic stored observation.
+- History uses an inclusive date range and returns observations ordered by `data_date ASC`.
+- Exposed verified stored fields:
+  - `data_date`
+  - `price`
+  - `exchange_bulletin_price`
+  - `shares_outstanding`
+  - `investor_count`
+  - `portfolio_size`
+  - fund identity fields (`asset_id`, `fund_code`, `fund_name`, `fund_kind`, `currency`)
+- Missing TEFAS fund returns 404.
+- Existing fund without latest daily data returns 404.
+- Valid empty history range returns `200` with `items=[]` and `total=0`.
+- `start_date > end_date` returns 422.
+- Decimal precision and nullable values are preserved.
+- No migration, provider integration, scheduler, valuation behavior, frontend code, or unrelated refactor was added.
+- Focused/related TEFAS verification: 172 passed.
+- Full regression suite: 1579 passed.
+- Real PostgreSQL + Uvicorn HTTP smoke passed against persisted TEFAS data, including auth, latest, history, Decimal serialization, and invalid-range validation.

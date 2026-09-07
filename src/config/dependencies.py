@@ -37,6 +37,7 @@ from src.services.portfolio_service import PortfolioService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.realized_pl_service import RealizedPlService
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
+from src.services.tefas_fund_daily_read_service import TefasFundDailyReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
 from src.services.token_service import TokenService
@@ -398,6 +399,19 @@ def get_tefas_fund_allocation_read_service(
     return TefasFundAllocationReadService(
         asset_repository=asset_repository,
         allocation_repository=allocation_repository,
+    )
+
+
+def get_tefas_fund_daily_read_service(
+    asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
+    daily_data_repository: Annotated[
+        TefasFundDailyDataRepository,
+        Depends(get_tefas_fund_daily_data_repository),
+    ],
+) -> TefasFundDailyReadService:
+    return TefasFundDailyReadService(
+        asset_repository=asset_repository,
+        daily_data_repository=daily_data_repository,
     )
 
 
