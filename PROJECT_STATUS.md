@@ -689,3 +689,34 @@ Status: COMPLETE - 2026-09-07
 - Focused plus related TEFAS regression tests: 155 passed.
 - Full regression suite: 1591 passed.
 - Real PostgreSQL + Uvicorn HTTP smoke passed against persisted TEFAS detail metadata, including authentication, latest-snapshot selection, Decimal serialization, nullable risk value, and missing-fund behavior.
+
+## TEFAS Current Management Fee Read API
+
+Status: COMPLETE - 2026-09-07
+
+- Added authenticated public endpoint:
+  - `GET /api/v1/tefas/funds/{fund_code}/management-fee/current`
+- Reads only the currently open persisted `TefasManagementFeeHistory` row.
+- Fund codes are normalized with `strip().upper()`.
+- Verified public coverage is limited to `YAT` and `EMK`.
+- Unsupported fund kinds such as `BYF`, `GYF` and `GSYF` return 404 rather than exposing unverified fee semantics.
+- Exposes:
+  - `asset_id`
+  - `fund_code`
+  - `fund_name`
+  - `fund_kind`
+  - `management_fee_percentage`
+  - `first_observed_at`
+  - `last_observed_at`
+  - `source_endpoint`
+  - `source_field_name`
+- `management_fee_percentage` preserves the persisted TEFAS percentage-point value exactly; no multiplication or division by 100 is performed.
+- Source endpoint and field name are preserved as provenance.
+- Missing TEFAS fund returns 404.
+- Supported fund without a current fee row returns 404.
+- Read endpoint does not trigger TEFAS network fetch, refresh, sync, scheduler action, database write, flush or commit.
+- No migration, history API, provider/scraper change, frontend work or unrelated refactor was added.
+- Focused tests: 18 passed.
+- Related management-fee/TEFAS read regression tests: 128 passed.
+- Full regression suite: 1609 passed.
+- Real PostgreSQL + Uvicorn HTTP smoke passed using temporary seeded YAT/current-fee data; authentication, Decimal preservation, provenance and missing-fund behavior were verified and all temporary smoke data was cleaned.

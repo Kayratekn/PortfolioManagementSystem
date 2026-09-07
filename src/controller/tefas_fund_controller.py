@@ -10,6 +10,7 @@ from src.config.dependencies import (
     get_tefas_fund_allocation_read_service,
     get_tefas_fund_daily_read_service,
     get_tefas_fund_metadata_read_service,
+    get_tefas_management_fee_read_service,
     get_tefas_fund_metrics_service,
 )
 from src.model.user import User
@@ -20,13 +21,29 @@ from src.response.tefas_fund_daily_data_response import (
 from src.response.tefas_fund_metadata_response import TefasFundLatestMetadataResponse
 from src.response.tefas_fund_metrics_response import TefasFundMetricsResponse
 from src.response.tefas_fund_response import TefasFundAllocationResponse
+from src.response.tefas_management_fee_response import TefasFundCurrentManagementFeeResponse
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
 from src.services.tefas_fund_daily_read_service import TefasFundDailyReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.tefas_fund_metadata_read_service import TefasFundMetadataReadService
+from src.services.tefas_management_fee_read_service import TefasManagementFeeReadService
 
 
 router = APIRouter(prefix="/api/v1/tefas/funds", tags=["tefas"])
+
+@router.get(
+    "/{fund_code}/management-fee/current",
+    response_model=TefasFundCurrentManagementFeeResponse,
+)
+def get_fund_current_management_fee(
+    fund_code: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    management_fee_read_service: Annotated[
+        TefasManagementFeeReadService,
+        Depends(get_tefas_management_fee_read_service),
+    ],
+) -> TefasFundCurrentManagementFeeResponse:
+    return management_fee_read_service.get_current_management_fee(fund_code=fund_code)
 
 @router.get("/{fund_code}/metadata/latest", response_model=TefasFundLatestMetadataResponse)
 def get_fund_latest_metadata(
