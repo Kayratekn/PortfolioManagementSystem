@@ -646,3 +646,46 @@ Status: COMPLETE — 2026-09-07
 - Focused/related TEFAS verification: 172 passed.
 - Full regression suite: 1579 passed.
 - Real PostgreSQL + Uvicorn HTTP smoke passed against persisted TEFAS data, including auth, latest, history, Decimal serialization, and invalid-range validation.
+
+## TEFAS Latest Detail Metadata Read API
+
+Status: COMPLETE - 2026-09-07
+
+- Added authenticated public endpoint:
+  - `GET /api/v1/tefas/funds/{fund_code}/metadata/latest`
+- Reads only the latest already persisted `TefasFundDetailSnapshot`; no TEFAS provider/network fetch, refresh, sync, scheduler action, or database write is triggered.
+- Fund codes are normalized with `strip().upper()`.
+- Exposes persisted fund identity fields:
+  - `asset_id`
+  - `fund_code`
+  - `fund_name`
+  - `fund_kind`
+  - `isin`
+  - `currency`
+- Exposes verified persisted detail metadata:
+  - `observed_at`
+  - `source_page`
+  - `fund_category`
+  - `category_rank`
+  - `category_fund_count`
+  - `market_share_raw`
+  - `risk_value`
+  - `tefas_status`
+  - `transaction_start_time`
+  - `transaction_end_time`
+  - `entry_commission_raw`
+  - `exit_commission_raw`
+  - `interest_content`
+  - `fund_sale_valor`
+  - `fund_redemption_valor`
+- `market_share_raw` and commission fields remain raw source values without inferred percentage semantics.
+- Valor fields remain source integer values without inferred settlement semantics.
+- `risk_value` is the persisted official TEFAS value and is not recalculated.
+- Missing TEFAS fund returns 404.
+- Existing TEFAS fund without a detail snapshot returns 404.
+- Decimal precision and nullable values are preserved.
+- No migration, metadata-history endpoint, provider/scraper change, management-fee API, founder field, frontend work, or unrelated refactor was added.
+- Focused metadata tests: 12 passed.
+- Focused plus related TEFAS regression tests: 155 passed.
+- Full regression suite: 1591 passed.
+- Real PostgreSQL + Uvicorn HTTP smoke passed against persisted TEFAS detail metadata, including authentication, latest-snapshot selection, Decimal serialization, nullable risk value, and missing-fund behavior.

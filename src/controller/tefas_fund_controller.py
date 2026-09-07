@@ -9,6 +9,7 @@ from src.config.dependencies import (
     get_current_user,
     get_tefas_fund_allocation_read_service,
     get_tefas_fund_daily_read_service,
+    get_tefas_fund_metadata_read_service,
     get_tefas_fund_metrics_service,
 )
 from src.model.user import User
@@ -16,14 +17,27 @@ from src.response.tefas_fund_daily_data_response import (
     TefasFundDailyHistoryResponse,
     TefasFundDailyLatestResponse,
 )
+from src.response.tefas_fund_metadata_response import TefasFundLatestMetadataResponse
 from src.response.tefas_fund_metrics_response import TefasFundMetricsResponse
 from src.response.tefas_fund_response import TefasFundAllocationResponse
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
 from src.services.tefas_fund_daily_read_service import TefasFundDailyReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
+from src.services.tefas_fund_metadata_read_service import TefasFundMetadataReadService
 
 
 router = APIRouter(prefix="/api/v1/tefas/funds", tags=["tefas"])
+
+@router.get("/{fund_code}/metadata/latest", response_model=TefasFundLatestMetadataResponse)
+def get_fund_latest_metadata(
+    fund_code: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    metadata_read_service: Annotated[
+        TefasFundMetadataReadService,
+        Depends(get_tefas_fund_metadata_read_service),
+    ],
+) -> TefasFundLatestMetadataResponse:
+    return metadata_read_service.get_latest_metadata(fund_code=fund_code)
 
 @router.get("/{fund_code}/latest", response_model=TefasFundDailyLatestResponse)
 def get_fund_latest_daily_data(
