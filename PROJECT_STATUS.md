@@ -743,3 +743,36 @@ Status: COMPLETE - 2026-09-07
 - Related integration regression tests: 79 passed.
 - Full regression suite: 1632 passed.
 - `python -m compileall src alembic` and `git diff --check` passed.
+
+## AIAnalysis Immutable Persistence
+
+Status: COMPLETE - 2026-09-07
+
+- Added append-only `AIAnalysis` persistence for versioned AI result history.
+- Added Alembic migration `20260907_0023_create_ai_analyses.py`.
+- `AIAnalysis` stores:
+  - `user_id`
+  - nullable `portfolio_id`
+  - `analysis_type`
+  - structured JSON `result_payload`
+  - nullable `explanation_text`
+  - nullable `disclaimer`
+  - required `model_version`
+  - nullable `formula_version`
+  - immutable `created_at`
+- `TimestampMixin` is intentionally not used and no `updated_at` column exists.
+- `analysis_type` and `model_version` must be nonblank.
+- `formula_version` may be NULL, but must be nonblank when provided.
+- No uniqueness constraint exists; repeated analyses create separate immutable history rows.
+- Repository exposes append/read operations only and never commits.
+- Persistence service creates a new row for every call, commits once at the service boundary, and rolls back on failure.
+- Reads use deterministic `created_at DESC, id DESC` ordering.
+- User isolation and portfolio-plus-user isolation are enforced in repository list/count operations.
+- Raw AI request payloads, recent news, report chunks, prompts and duplicated input context are not persisted in `AIAnalysis`.
+- Portfolio ownership validation remains intentionally deferred to the future AI orchestration layer before AI invocation.
+- Focused AIAnalysis tests: 23 passed.
+- Related persistence/model regression tests: 61 passed.
+- GPT-5.5 High correctness review passed with no blocking issues.
+- Real PostgreSQL migration smoke passed for `0022 -> 0023 -> 0022 -> 0023`; final database head is `20260907_0023`.
+- Full regression suite: 1655 passed.
+- `python -m compileall src alembic` and `git diff --check` passed.
