@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Portfolio Management System"
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://127.0.0.1:4173",
+            "http://localhost:4173",
+        ]
+    )
+
     database_url: str = Field(
         default="postgresql+psycopg2://postgres:postgres@localhost:5432/ai_portfolio"
     )

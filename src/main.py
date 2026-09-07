@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # Support running `python src/main.py` by ensuring the project root is importable.
 if __package__ in {None, ""}:
@@ -33,6 +34,13 @@ from src.controller.tefas_fund_controller import router as tefas_fund_router
 settings = get_settings()
 
 app = FastAPI(title=settings.app_name)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(asset_router)
