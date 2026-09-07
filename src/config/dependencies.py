@@ -20,6 +20,7 @@ from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
 from src.repositories.tefas_fund_detail_snapshot_repository import TefasFundDetailSnapshotRepository
+from src.repositories.tefas_management_fee_history_repository import TefasManagementFeeHistoryRepository
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
 from src.repositories.watchlist_repository import WatchlistRepository
@@ -41,6 +42,7 @@ from src.services.tefas_fund_allocation_read_service import TefasFundAllocationR
 from src.services.tefas_fund_daily_read_service import TefasFundDailyReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.tefas_fund_metadata_read_service import TefasFundMetadataReadService
+from src.services.tefas_management_fee_read_service import TefasManagementFeeReadService
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
 from src.services.token_service import TokenService
 from src.services.transaction_service import TransactionService
@@ -115,6 +117,13 @@ def get_tefas_fund_detail_snapshot_repository(
     db: Annotated[Session, Depends(get_db)],
 ) -> TefasFundDetailSnapshotRepository:
     return TefasFundDetailSnapshotRepository(db)
+
+
+def get_tefas_management_fee_history_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> TefasManagementFeeHistoryRepository:
+    return TefasManagementFeeHistoryRepository(db)
+
 
 def get_tefas_fund_daily_data_repository(
     db: Annotated[Session, Depends(get_db)],
@@ -410,6 +419,19 @@ def get_tefas_fund_allocation_read_service(
     )
 
 
+
+
+def get_tefas_management_fee_read_service(
+    asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
+    management_fee_history_repository: Annotated[
+        TefasManagementFeeHistoryRepository,
+        Depends(get_tefas_management_fee_history_repository),
+    ],
+) -> TefasManagementFeeReadService:
+    return TefasManagementFeeReadService(
+        asset_repository=asset_repository,
+        management_fee_history_repository=management_fee_history_repository,
+    )
 
 def get_tefas_fund_metadata_read_service(
     asset_repository: Annotated[AssetRepository, Depends(get_asset_repository)],
