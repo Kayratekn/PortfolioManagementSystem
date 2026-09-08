@@ -31,6 +31,7 @@ from src.controller.portfolio_controller import router as portfolio_router
 from src.controller.portfolio_valuation_controller import router as portfolio_valuation_router
 from src.controller.portfolio_performance_controller import router as portfolio_performance_router
 from src.controller.realized_pl_controller import router as realized_pl_router
+from src.controller.report_controller import router as report_router
 from src.controller.transaction_controller import router as transaction_router
 from src.controller.watchlist_controller import router as watchlist_router
 from src.controller.unrealized_pl_controller import router as unrealized_pl_router
@@ -53,6 +54,7 @@ app.include_router(ai_analysis_history_portfolio_router)
 app.include_router(ai_portfolio_analysis_router)
 app.include_router(ai_robustness_router)
 app.include_router(auth_router)
+app.include_router(report_router)
 app.include_router(asset_router)
 app.include_router(portfolio_router)
 app.include_router(portfolio_cash_flow_router)

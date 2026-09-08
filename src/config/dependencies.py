@@ -19,6 +19,7 @@ from src.repositories.exchange_rate_repository import ExchangeRateRepository
 from src.repositories.note_repository import NoteRepository
 from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
+from src.repositories.report_repository import ReportRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
 from src.repositories.tefas_fund_detail_snapshot_repository import TefasFundDetailSnapshotRepository
@@ -44,6 +45,7 @@ from src.services.portfolio_performance_service import PortfolioPerformanceServi
 from src.services.portfolio_service import PortfolioService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.realized_pl_service import RealizedPlService
+from src.services.report_upload_service import ReportUploadService
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
 from src.services.tefas_fund_daily_read_service import TefasFundDailyReadService
 from src.services.tefas_fund_metrics_service import TefasFundMetricsService
@@ -55,6 +57,8 @@ from src.services.transaction_service import TransactionService
 from src.services.unrealized_pl_service import UnrealizedPlService
 from src.services.user_service import UserService
 from src.services.watchlist_service import WatchlistService
+from src.integrations.local_report_storage import LocalReportStorage
+from src.integrations.pdf_text_extractor import PdfTextExtractor
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -78,6 +82,10 @@ def get_note_repository(db: Annotated[Session, Depends(get_db)]) -> NoteReposito
 
 def get_ai_analysis_repository(db: Annotated[Session, Depends(get_db)]) -> AiAnalysisRepository:
     return AiAnalysisRepository(db)
+
+
+def get_report_repository(db: Annotated[Session, Depends(get_db)]) -> ReportRepository:
+    return ReportRepository(db)
 
 
 def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetRepository:
@@ -161,6 +169,32 @@ def get_ai_analysis_history_service(
     return AiAnalysisHistoryService(
         ai_analysis_repository=ai_analysis_repository,
         portfolio_repository=portfolio_repository,
+    )
+
+
+def get_report_storage() -> LocalReportStorage:
+    settings = get_settings()
+    return LocalReportStorage(
+        root=settings.report_storage_dir,
+        max_file_size_bytes=settings.report_max_file_size_bytes,
+    )
+
+
+def get_pdf_text_extractor() -> PdfTextExtractor:
+    return PdfTextExtractor()
+
+
+def get_report_upload_service(
+    db: Annotated[Session, Depends(get_db)],
+    report_repository: Annotated[ReportRepository, Depends(get_report_repository)],
+    storage: Annotated[LocalReportStorage, Depends(get_report_storage)],
+    pdf_text_extractor: Annotated[PdfTextExtractor, Depends(get_pdf_text_extractor)],
+) -> ReportUploadService:
+    return ReportUploadService(
+        db=db,
+        report_repository=report_repository,
+        storage=storage,
+        pdf_text_extractor=pdf_text_extractor,
     )
 
 

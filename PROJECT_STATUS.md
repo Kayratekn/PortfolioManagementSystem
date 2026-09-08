@@ -864,3 +864,31 @@ Status: COMPLETE - 2026-09-08
 - Focused AI history tests: 12 passed.
 - Full regression suite: 1761 passed, 12 non-blocking Starlette deprecation warnings.
 - compileall and git diff --check passed.
+
+## Report Upload / RAG Persistence Foundation
+
+Status: COMPLETE - 2026-09-08
+
+- Added authenticated PDF upload endpoint:
+  - POST /api/v1/reports
+- Added ReportDocument and ReportChunk persistence models.
+- Added Alembic migration 20260908_0024 for report_documents and report_chunks.
+- ReportDocument stores user ownership and report metadata; ReportChunk stores deterministic page-numbered text chunks.
+- Uploaded PDF files are stored in configurable local project storage using generated UUID-based internal storage keys.
+- Client filenames are metadata only and never determine filesystem paths.
+- Default maximum report size is 10 MiB and is enforced while streaming the upload to storage.
+- SHA-256 is computed while streaming.
+- Upload validation requires a nonblank .pdf filename, application/pdf content type, nonempty content, PDF signature, readable non-encrypted PDF, at least one page, and at least one nonblank extracted text chunk.
+- PDF extraction is isolated behind the PdfTextExtractor integration using pypdf.
+- Page numbers are 1-based; chunk_index is global, deterministic, and starts at 0.
+- Document and chunks are persisted as one database transaction.
+- Repository methods flush but do not commit; ReportUploadService owns commit and rollback.
+- Validation, parsing, persistence, response-validation, and commit failures roll back database work and clean up stored files.
+- Local storage uses exclusive file creation, bounded UUID-collision retry, traversal-safe internal keys, and path-free filesystem errors.
+- Security/correctness review found four blockers involving commit/response ordering, UUID collision cleanup, unlink error handling, and partial-persistence rollback coverage. All four were fixed and GPT-5.6 Sol High re-review passed.
+- Report upload focused tests: 22 passed.
+- Full regression suite: 1783 passed with 12 existing non-blocking Starlette deprecation warnings.
+- Real PostgreSQL migration upgrade, downgrade, and re-upgrade passed.
+- Final Alembic head: 20260908_0024.
+- compileall and git diff --check passed.
+- Report Q&A, embeddings/vector search, and AI service calls are intentionally outside this foundation slice.
