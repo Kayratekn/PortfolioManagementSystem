@@ -839,3 +839,28 @@ Status: COMPLETE - 2026-09-07
 - `python -m compileall src alembic`, `git diff --check`, and Alembic head verification passed.
 - No migration was required; Alembic head remains `20260907_0023`.
 - Live backend-to-AI service HTTP acceptance remains pending until the external AI service is available; this is an integration availability dependency, not a backend implementation blocker.
+
+## AI Analysis History / Read API
+
+Status: COMPLETE - 2026-09-08
+
+- Added authenticated read-only AI analysis history endpoints:
+  - GET /api/v1/ai/analyses
+  - GET /api/v1/ai/analyses/{analysis_id}
+  - GET /api/v1/portfolios/{portfolio_id}/ai/analyses
+- Global history is scoped to the authenticated user.
+- Detail lookup is scoped by both analysis_id and user_id.
+- Missing and cross-user analyses return 404 "AI analysis not found."
+- Portfolio history verifies portfolio ownership before listing.
+- Missing and cross-user portfolios return 404 "Portfolio not found."
+- Portfolio history is scoped by both portfolio_id and authenticated user_id.
+- Pagination uses skip >= 0 and limit 1..100 with default 50.
+- Deterministic ordering remains created_at DESC, id DESC.
+- Public responses expose analysis_id, portfolio_id, analysis_type, result_payload, explanation_text, disclaimer, model_version, formula_version, and created_at.
+- user_id is not exposed.
+- Read endpoints do not call the external AI service and do not write or mutate AIAnalysis records.
+- No migration added; Alembic head remains 20260907_0023.
+- Security review found one test-coverage gap for cross-user portfolio analysis isolation; the test was strengthened and re-review passed.
+- Focused AI history tests: 12 passed.
+- Full regression suite: 1761 passed, 12 non-blocking Starlette deprecation warnings.
+- compileall and git diff --check passed.

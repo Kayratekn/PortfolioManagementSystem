@@ -19,6 +19,13 @@ class AiAnalysisRepository:
         statement = select(AiAnalysis).where(AiAnalysis.id == analysis_id)
         return self.db.scalar(statement)
 
+    def get_by_id_for_user(self, *, analysis_id: int, user_id: int) -> AiAnalysis | None:
+        statement = select(AiAnalysis).where(
+            AiAnalysis.id == analysis_id,
+            AiAnalysis.user_id == user_id,
+        )
+        return self.db.scalar(statement)
+
     def list_by_user(self, *, user_id: int, skip: int = 0, limit: int = 100) -> list[AiAnalysis]:
         statement = (
             select(AiAnalysis)
