@@ -26,6 +26,7 @@ from src.repositories.tefas_management_fee_history_repository import TefasManage
 from src.repositories.transaction_repository import TransactionRepository
 from src.repositories.user_repository import UserRepository
 from src.repositories.watchlist_repository import WatchlistRepository
+from src.services.ai_analysis_history_service import AiAnalysisHistoryService
 from src.services.ai_analysis_persistence_service import AiAnalysisPersistenceService
 from src.services.ai_portfolio_analysis_service import AiPortfolioAnalysisService
 from src.services.ai_robustness_service import AiRobustnessService
@@ -148,6 +149,19 @@ def get_ai_analysis_persistence_service(
     ],
 ) -> AiAnalysisPersistenceService:
     return AiAnalysisPersistenceService(db=db, repository=ai_analysis_repository)
+
+
+def get_ai_analysis_history_service(
+    ai_analysis_repository: Annotated[
+        AiAnalysisRepository,
+        Depends(get_ai_analysis_repository),
+    ],
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+) -> AiAnalysisHistoryService:
+    return AiAnalysisHistoryService(
+        ai_analysis_repository=ai_analysis_repository,
+        portfolio_repository=portfolio_repository,
+    )
 
 
 def get_ai_client() -> AiClient:

@@ -11,6 +11,10 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config.settings import get_settings
+from src.controller.ai_analysis_history_controller import (
+    portfolio_router as ai_analysis_history_portfolio_router,
+)
+from src.controller.ai_analysis_history_controller import router as ai_analysis_history_router
 from src.controller.ai_portfolio_analysis_controller import router as ai_portfolio_analysis_router
 from src.controller.ai_robustness_controller import router as ai_robustness_router
 from src.controller.asset_controller import router as asset_router
@@ -44,6 +48,8 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 app.include_router(health_router)
+app.include_router(ai_analysis_history_router)
+app.include_router(ai_analysis_history_portfolio_router)
 app.include_router(ai_portfolio_analysis_router)
 app.include_router(ai_robustness_router)
 app.include_router(auth_router)
