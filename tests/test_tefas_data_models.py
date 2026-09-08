@@ -17,6 +17,7 @@ def test_asset_can_be_inserted_with_expected_defaults(db_session: Session) -> No
         asset_name="Example Fund",
         asset_type="FUND",
         fund_kind="YAT",
+        currency="TRY",
         data_source="TEFAS",
     )
 
@@ -27,7 +28,7 @@ def test_asset_can_be_inserted_with_expected_defaults(db_session: Session) -> No
     assert asset.id is not None
     assert asset.is_active is True
     assert asset.isin is None
-    assert asset.currency is None
+    assert asset.currency == "TRY"
 
 
 def test_asset_can_persist_explicit_isin(db_session: Session) -> None:
@@ -53,6 +54,7 @@ def test_asset_unique_constraint_rejects_same_data_source_and_asset_code(db_sess
         asset_name="Example Fund",
         asset_type="FUND",
         fund_kind="YAT",
+        currency="TRY",
         data_source="TEFAS",
     )
     second_asset = Asset(
@@ -60,6 +62,7 @@ def test_asset_unique_constraint_rejects_same_data_source_and_asset_code(db_sess
         asset_name="Another Fund",
         asset_type="FUND",
         fund_kind="YAT",
+        currency="TRY",
         data_source="TEFAS",
     )
 
@@ -78,6 +81,7 @@ def test_asset_code_may_be_reused_across_different_data_sources(db_session: Sess
         asset_name="Example Fund",
         asset_type="FUND",
         fund_kind="YAT",
+        currency="TRY",
         data_source="TEFAS",
     )
     other_asset = Asset(
@@ -101,6 +105,7 @@ def test_tefas_fund_daily_data_can_be_inserted_for_existing_asset(db_session: Se
         asset_name="Example Fund",
         asset_type="FUND",
         fund_kind="YAT",
+        currency="TRY",
         data_source="TEFAS",
     )
     db_session.add(asset)
@@ -137,6 +142,7 @@ def test_tefas_fund_daily_data_unique_constraint_rejects_same_asset_and_date(db_
         asset_name="Example Fund",
         asset_type="FUND",
         fund_kind="YAT",
+        currency="TRY",
         data_source="TEFAS",
     )
     db_session.add(asset)

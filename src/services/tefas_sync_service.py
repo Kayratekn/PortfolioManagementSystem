@@ -87,7 +87,7 @@ class TefasSyncService:
                         asset_name=row["fund_name"],
                         asset_type="FUND",
                         fund_kind=row["fund_kind"],
-                        currency=None,
+                        currency="TRY",
                         data_source="TEFAS",
                         is_active=True,
                     )
@@ -103,6 +103,9 @@ class TefasSyncService:
                         asset_changed = True
                     if asset.fund_kind != row["fund_kind"]:
                         asset.fund_kind = row["fund_kind"]
+                        asset_changed = True
+                    if asset.currency is None:
+                        asset.currency = "TRY"
                         asset_changed = True
                     if asset.is_active is not True:
                         asset.is_active = True

@@ -183,7 +183,7 @@ def test_latest_metadata_returns_canonical_response_and_decimal_strings(
 
 def test_latest_metadata_preserves_nullable_fields(client, db_session: Session) -> None:
     token = create_authenticated_user(client)
-    asset = create_tefas_asset(db_session, fund_kind=None, isin=None, currency=None)
+    asset = create_tefas_asset(db_session, fund_kind=None, isin=None, currency="TRY")
     add_detail_snapshot(
         db_session,
         asset_id=asset.id,
@@ -210,7 +210,7 @@ def test_latest_metadata_preserves_nullable_fields(client, db_session: Session) 
     body = response.json()
     assert body["fund_kind"] is None
     assert body["isin"] is None
-    assert body["currency"] is None
+    assert body["currency"] == "TRY"
     assert body["category_rank"] is None
     assert body["category_fund_count"] is None
     assert body["market_share_raw"] is None

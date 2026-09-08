@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from src.model.asset import Asset
@@ -120,6 +120,41 @@ class AssetRepository:
         self.db.add(asset)
         self.db.flush()
         return asset
+
+    def count_tefas_assets_with_null_currency(self) -> int:
+        statement = select(func.count(Asset.id)).where(
+            Asset.data_source == "TEFAS",
+            Asset.currency.is_(None),
+        )
+        return int(self.db.scalar(statement) or 0)
+
+    def count_tefas_assets_with_try_currency(self) -> int:
+        statement = select(func.count(Asset.id)).where(
+            Asset.data_source == "TEFAS",
+            Asset.currency == "TRY",
+        )
+        return int(self.db.scalar(statement) or 0)
+
+    def count_tefas_assets_with_non_try_currency(self) -> int:
+        statement = select(func.count(Asset.id)).where(
+            Asset.data_source == "TEFAS",
+            Asset.currency.is_not(None),
+            Asset.currency != "TRY",
+        )
+        return int(self.db.scalar(statement) or 0)
+
+    def set_try_currency_for_tefas_assets_with_null_currency(self) -> int:
+        statement = (
+            update(Asset)
+            .where(
+                Asset.data_source == "TEFAS",
+                Asset.currency.is_(None),
+            )
+            .values(currency="TRY")
+        )
+        result = self.db.execute(statement)
+        self.db.flush()
+        return int(result.rowcount or 0)
 
     def _active_catalog_filters(self, search: str | None) -> list[object]:
         filters: list[object] = [Asset.is_active.is_(True)]
