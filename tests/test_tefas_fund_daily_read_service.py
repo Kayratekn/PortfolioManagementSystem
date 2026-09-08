@@ -94,7 +94,7 @@ def test_latest_normalizes_fund_code_and_returns_latest_stored_observation(
 
 
 def test_latest_preserves_nullable_values(db_session: Session) -> None:
-    asset = _create_asset(db_session, currency=None, fund_kind=None)
+    asset = _create_asset(db_session, currency="TRY", fund_kind=None)
     _add_daily_data(
         db_session,
         asset_id=asset.id,
@@ -108,7 +108,7 @@ def test_latest_preserves_nullable_values(db_session: Session) -> None:
     result = _service(db_session).get_latest(fund_code="AAL")
 
     assert result.fund_kind is None
-    assert result.currency is None
+    assert result.currency == "TRY"
     assert result.observation.exchange_bulletin_price is None
     assert result.observation.shares_outstanding is None
     assert result.observation.investor_count is None

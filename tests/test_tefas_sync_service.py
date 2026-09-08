@@ -58,7 +58,7 @@ def test_first_synchronization_inserts_data(db_session: Session) -> None:
     assert asset.asset_name == "Example Fund"
     assert asset.asset_type == "FUND"
     assert asset.fund_kind == "YAT"
-    assert asset.currency is None
+    assert asset.currency == "TRY"
     assert asset.data_source == "TEFAS"
     assert asset.is_active is True
     assert daily_data.asset_id == asset.id
@@ -230,3 +230,54 @@ def test_processing_failure_rolls_back_complete_transaction(db_session: Session,
 
     assert asset_count == 0
     assert daily_count == 0
+
+
+def test_existing_tefas_asset_with_null_currency_is_self_healed(db_session: Session) -> None:
+    asset = Asset(
+        asset_code="AAL",
+        asset_name="Example Fund",
+        asset_type="FUND",
+        fund_kind="YAT",
+        currency=None,
+        data_source="TEFAS",
+        is_active=True,
+    )
+    db_session.add(asset)
+    db_session.commit()
+
+    result = TefasSyncService(
+        db_session,
+        tefas_service=FakeTefasService([_build_normalized_row()]),
+    ).sync_general_info(
+        start_date=date(2026, 4, 24),
+        end_date=date(2026, 4, 24),
+    )
+
+    db_session.refresh(asset)
+    assert asset.currency == "TRY"
+    assert result.assets_updated == 1
+
+
+def test_existing_tefas_asset_with_non_null_currency_is_preserved(db_session: Session) -> None:
+    asset = Asset(
+        asset_code="AAL",
+        asset_name="Example Fund",
+        asset_type="FUND",
+        fund_kind="YAT",
+        currency="USD",
+        data_source="TEFAS",
+        is_active=True,
+    )
+    db_session.add(asset)
+    db_session.commit()
+
+    TefasSyncService(
+        db_session,
+        tefas_service=FakeTefasService([_build_normalized_row()]),
+    ).sync_general_info(
+        start_date=date(2026, 4, 24),
+        end_date=date(2026, 4, 24),
+    )
+
+    db_session.refresh(asset)
+    assert asset.currency == "USD"

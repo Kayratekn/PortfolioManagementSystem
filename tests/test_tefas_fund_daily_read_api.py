@@ -147,7 +147,7 @@ def test_latest_returns_canonical_fund_and_latest_observation(client, db_session
 
 def test_latest_preserves_nullable_values(client, db_session: Session) -> None:
     token = create_authenticated_user(client)
-    asset = create_tefas_asset(db_session, fund_kind=None, currency=None)
+    asset = create_tefas_asset(db_session, fund_kind=None, currency="TRY")
     add_daily_data(
         db_session,
         asset_id=asset.id,
@@ -164,7 +164,7 @@ def test_latest_preserves_nullable_values(client, db_session: Session) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["fund_kind"] is None
-    assert body["currency"] is None
+    assert body["currency"] == "TRY"
     assert body["observation"]["exchange_bulletin_price"] is None
     assert body["observation"]["shares_outstanding"] is None
     assert body["observation"]["investor_count"] is None

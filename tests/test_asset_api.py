@@ -153,6 +153,7 @@ def test_asset_catalog_preserves_nullable_isin_and_currency(
         asset_name="Nullable Fund",
         isin=None,
         currency=None,
+        data_source="MANUAL",
     )
 
     response = client.get(

@@ -133,7 +133,7 @@ def test_latest_metadata_normalizes_fund_code_and_returns_latest_snapshot(
 
 
 def test_latest_metadata_preserves_nullable_fields(db_session: Session) -> None:
-    asset = _create_asset(db_session, fund_kind=None, isin=None, currency=None)
+    asset = _create_asset(db_session, fund_kind=None, isin=None, currency="TRY")
     _add_snapshot(
         db_session,
         asset_id=asset.id,
@@ -155,7 +155,7 @@ def test_latest_metadata_preserves_nullable_fields(db_session: Session) -> None:
 
     assert result.fund_kind is None
     assert result.isin is None
-    assert result.currency is None
+    assert result.currency == "TRY"
     assert result.category_rank is None
     assert result.category_fund_count is None
     assert result.market_share_raw is None

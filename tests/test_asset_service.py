@@ -17,7 +17,7 @@ class FakeAssetRepository:
                 asset_type="FUND",
                 fund_kind="YAT",
                 isin=None,
-                currency=None,
+                currency="TRY",
                 data_source="TEFAS",
             )
         ]
@@ -51,4 +51,4 @@ def test_list_assets_returns_catalog_response_and_forwards_query() -> None:
     assert len(result.items) == 1
     assert result.items[0].asset_code == "AAL"
     assert result.items[0].isin is None
-    assert result.items[0].currency is None
+    assert result.items[0].currency == "TRY"
