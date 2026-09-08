@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,6 +38,8 @@ class Settings(BaseSettings):
     tcmb_retry_wait_seconds: float = Field(default=10.0, ge=0)
     ai_service_url: str = Field(default="http://127.0.0.1:8001")
     ai_timeout_seconds: float = Field(default=15.0, gt=0)
+    report_storage_dir: Path = Field(default=Path("data/reports"))
+    report_max_file_size_bytes: int = Field(default=10485760, gt=0)
 
 
 @lru_cache
