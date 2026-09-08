@@ -45,6 +45,7 @@ from src.services.portfolio_performance_service import PortfolioPerformanceServi
 from src.services.portfolio_service import PortfolioService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.realized_pl_service import RealizedPlService
+from src.services.report_qa_service import ReportQaService
 from src.services.report_upload_service import ReportUploadService
 from src.services.tefas_fund_allocation_read_service import TefasFundAllocationReadService
 from src.services.tefas_fund_daily_read_service import TefasFundDailyReadService
@@ -195,6 +196,21 @@ def get_report_upload_service(
         report_repository=report_repository,
         storage=storage,
         pdf_text_extractor=pdf_text_extractor,
+    )
+
+
+def get_report_qa_service(
+    report_repository: Annotated[ReportRepository, Depends(get_report_repository)],
+    ai_client: Annotated[AiClient, Depends(get_ai_client)],
+    persistence_service: Annotated[
+        AiAnalysisPersistenceService,
+        Depends(get_ai_analysis_persistence_service),
+    ],
+) -> ReportQaService:
+    return ReportQaService(
+        report_repository=report_repository,
+        ai_client=ai_client,
+        persistence_service=persistence_service,
     )
 
 
