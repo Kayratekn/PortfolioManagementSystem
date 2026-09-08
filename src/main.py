@@ -17,6 +17,7 @@ from src.controller.ai_analysis_history_controller import (
 from src.controller.ai_analysis_history_controller import router as ai_analysis_history_router
 from src.controller.ai_portfolio_analysis_controller import router as ai_portfolio_analysis_router
 from src.controller.ai_robustness_controller import router as ai_robustness_router
+from src.controller.ai_sentiment_controller import router as ai_sentiment_router
 from src.controller.asset_controller import router as asset_router
 from src.controller.auth_controller import router as auth_router
 from src.controller.benchmark_catalog_controller import router as benchmark_catalog_router
@@ -56,6 +57,7 @@ app.include_router(ai_analysis_history_router)
 app.include_router(ai_analysis_history_portfolio_router)
 app.include_router(ai_portfolio_analysis_router)
 app.include_router(ai_robustness_router)
+app.include_router(ai_sentiment_router)
 app.include_router(auth_router)
 app.include_router(report_router)
 app.include_router(expert_source_router)

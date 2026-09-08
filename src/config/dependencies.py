@@ -34,6 +34,7 @@ from src.services.ai_analysis_history_service import AiAnalysisHistoryService
 from src.services.ai_analysis_persistence_service import AiAnalysisPersistenceService
 from src.services.ai_portfolio_analysis_service import AiPortfolioAnalysisService
 from src.services.ai_robustness_service import AiRobustnessService
+from src.services.ai_sentiment_service import AiSentimentService
 from src.services.asset_service import AssetService
 from src.services.benchmark_catalog_service import BenchmarkCatalogService
 from src.services.benchmark_comparison_service import BenchmarkComparisonService
@@ -293,6 +294,24 @@ def get_ai_robustness_service(
         transaction_repository=transaction_repository,
         daily_data_repository=daily_data_repository,
         allocation_repository=allocation_repository,
+        ai_client=ai_client,
+        persistence_service=persistence_service,
+    )
+
+
+def get_ai_sentiment_service(
+    sentiment_post_repository: Annotated[
+        SentimentPostRepository,
+        Depends(get_sentiment_post_repository),
+    ],
+    ai_client: Annotated[AiClient, Depends(get_ai_client)],
+    persistence_service: Annotated[
+        AiAnalysisPersistenceService,
+        Depends(get_ai_analysis_persistence_service),
+    ],
+) -> AiSentimentService:
+    return AiSentimentService(
+        sentiment_post_repository=sentiment_post_repository,
         ai_client=ai_client,
         persistence_service=persistence_service,
     )
