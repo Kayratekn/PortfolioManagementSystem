@@ -16,6 +16,9 @@ from src.repositories.benchmark_price_repository import BenchmarkPriceRepository
 from src.repositories.benchmark_repository import BenchmarkRepository
 from src.repositories.data_sync_run_repository import DataSyncRunRepository
 from src.repositories.exchange_rate_repository import ExchangeRateRepository
+from src.repositories.expert_source_repository import ExpertSourceRepository
+from src.repositories.sentiment_post_repository import SentimentPostRepository
+from src.repositories.user_expert_source_repository import UserExpertSourceRepository
 from src.repositories.note_repository import NoteRepository
 from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
@@ -37,6 +40,9 @@ from src.services.benchmark_comparison_service import BenchmarkComparisonService
 from src.services.cost_basis_service import CostBasisService
 from src.services.data_sync_run_service import DataSyncRunService
 from src.services.fx_conversion_service import FxConversionService
+from src.services.expert_source_service import ExpertSourceService
+from src.services.sentiment_post_service import SentimentPostService
+from src.services.user_expert_source_service import UserExpertSourceService
 from src.services.holding_service import HoldingService
 from src.services.note_service import NoteService
 from src.services.portfolio_cash_flow_service import PortfolioCashFlowService
@@ -88,6 +94,17 @@ def get_ai_analysis_repository(db: Annotated[Session, Depends(get_db)]) -> AiAna
 def get_report_repository(db: Annotated[Session, Depends(get_db)]) -> ReportRepository:
     return ReportRepository(db)
 
+
+def get_expert_source_repository(db: Annotated[Session, Depends(get_db)]) -> ExpertSourceRepository:
+    return ExpertSourceRepository(db)
+
+
+def get_user_expert_source_repository(db: Annotated[Session, Depends(get_db)]) -> UserExpertSourceRepository:
+    return UserExpertSourceRepository(db)
+
+
+def get_sentiment_post_repository(db: Annotated[Session, Depends(get_db)]) -> SentimentPostRepository:
+    return SentimentPostRepository(db)
 
 def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetRepository:
     return AssetRepository(db)
@@ -319,6 +336,17 @@ def get_note_service(
         portfolio_repository=portfolio_repository,
     )
 
+
+def get_expert_source_service(expert_source_repository: Annotated[ExpertSourceRepository, Depends(get_expert_source_repository)]) -> ExpertSourceService:
+    return ExpertSourceService(expert_source_repository)
+
+
+def get_user_expert_source_service(db: Annotated[Session, Depends(get_db)], expert_source_repository: Annotated[ExpertSourceRepository, Depends(get_expert_source_repository)], user_expert_source_repository: Annotated[UserExpertSourceRepository, Depends(get_user_expert_source_repository)]) -> UserExpertSourceService:
+    return UserExpertSourceService(db=db, expert_source_repository=expert_source_repository, repository=user_expert_source_repository)
+
+
+def get_sentiment_post_service(sentiment_post_repository: Annotated[SentimentPostRepository, Depends(get_sentiment_post_repository)]) -> SentimentPostService:
+    return SentimentPostService(sentiment_post_repository)
 
 def get_watchlist_service(
     db: Annotated[Session, Depends(get_db)],

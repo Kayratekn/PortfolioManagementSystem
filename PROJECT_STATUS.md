@@ -7,7 +7,7 @@
 - **Team size:** 4
 - **Supervisor:** Prof. Dr. Hakan Altınçay
 - **Current backend stage:** Authentication, Portfolio CRUD, Transaction and Holdings foundations are stable. TEFAS valuation-price and TCMB FX foundations are implemented and validated. Portfolio Valuation Aggregation v1 is implemented and validated, exposed through a stable authenticated API contract: `GET /api/v1/portfolios/{portfolio_id}/valuation?valuation_date=YYYY-MM-DD`, and Portfolio Weights v1 is now implemented and validated through that existing endpoint. `valuation_date` is required. Each valuation item exposes `weight: Decimal | None`; weights are `0..1` ratios based on portfolio-currency `market_value`, complete portfolios calculate exact Decimal weights, and incomplete portfolios expose null weight for every item without partial-subset weights. The API preserves `COMPLETE`/`INCOMPLETE` status, unavailable reason, price provenance and FX provenance. Decimal monetary values and weights remain Decimal internally and serialize safely through the Pydantic/FastAPI response contract. No new endpoint or migration was introduced for weights. Cost Basis v1 is now implemented and validated through the public authenticated API `GET /api/v1/portfolios/{portfolio_id}/cost-basis?as_of_date=YYYY-MM-DD`, using the documented Moving Weighted Average Cost methodology. Unrealized P/L v1 is now implemented and validated through the public authenticated API `GET /api/v1/portfolios/{portfolio_id}/unrealized-pl?as_of_date=YYYY-MM-DD`, using the previously documented native-currency-only methodology and completed service implementation. `as_of_date` is required, the endpoint is authenticated and ownership-protected, and the response remains native-currency only. Unrealized P/L v1 has no portfolio-base-currency P/L, FX-adjusted cost basis, portfolio-level Unrealized P/L total, Unrealized P/L percentage, Realized P/L, migration, table or schema change. Cost Basis remains transaction-based, derives native-currency cost basis through deterministic Decimal replay, requires `as_of_date`, preserves ownership isolation, serializes Decimal values as JSON strings, and does not add a mutable cost-basis/holdings table, migration, portfolio-level summed cost-basis total, realized P/L implementation or FX conversion of cost basis/P&L. Public Realized P/L v1 API is now implemented and validated at `GET /api/v1/portfolios/{portfolio_id}/realized-pl?as_of_date=YYYY-MM-DD`. `as_of_date` is required, authentication is required, and portfolio ownership isolation returns 404 with `Portfolio not found.`. The response exposes `portfolio_id`, `as_of_date`, `status` and `items`; each item exposes `asset_id`, `asset_code`, `asset_name`, `asset_currency`, `status`, `unavailable_reason`, `sold_quantity`, `realized_proceeds`, `realized_cost_basis` and `native_realized_pl`. Decimal financial values remain Decimal internally and serialize as JSON strings. Realized P/L remains transaction-sourced, cumulative through one `as_of_date`, native-currency only, and uses SELL activity on or before `as_of_date` as its asset universe so fully sold assets remain included. Missing or blank `Asset.currency` produces an `UNAVAILABLE` item that preserves `sold_quantity` while exposing null monetary outputs. Cost Basis and Realized P/L continue to share one canonical Moving Weighted Average Cost replay helper. Transaction History public API is now implemented and validated at `GET /api/v1/portfolios/{portfolio_id}/transactions` with authentication, ownership isolation, `skip`/`limit` pagination, deterministic `transaction_date ASC, id ASC` ordering and `TransactionListResponse`. Asset Catalog public API is now implemented and validated at `GET /api/v1/assets` with authentication, active-asset-only scope, `skip`/`limit` pagination, optional case-insensitive search across `asset_code` and `asset_name`, deterministic `asset_code ASC, id ASC` ordering and nullable `isin`/`currency` preservation. No market price or freshness metadata is exposed by the Asset Catalog API. Portfolio Historical Performance / TWR foundation is now implemented and validated through the public authenticated API `GET /api/v1/portfolios/{portfolio_id}/performance?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`. `start_date` and `end_date` are required inclusive dates; `end_date` must be greater than or equal to `start_date`; ranges over 366 inclusive calendar days return HTTP 422. Performance uses calendar-day points, daily-close historical valuation including assets plus derived cash, start-of-day DEPOSIT/WITHDRAWAL external flows, and BUY/SELL remain internal trades that never count as external flows. Decimal arithmetic is used throughout, never float. Provider-independent Benchmark + BenchmarkPrice storage foundation is now implemented and validated via migration `20260903_0016`, following `20260902_0015`. Benchmark metadata + generic historical price import foundation is now implemented and validated via migration `20260903_0017`, following `20260903_0016`; `Benchmark.index_owner` is required, nonblank and uppercase, `Benchmark.return_type` is required and constrained to `PRICE_RETURN` or `TOTAL_RETURN`, `provider` remains the configured data-provider identity and `BenchmarkPrice.source` remains row-level provenance. The generic benchmark price parser accepts canonical `date,close` rows, parses close directly from string to Decimal, rejects floats, non-finite/blank/malformed/zero/negative values and values requiring rounding beyond `NUMERIC(20,8)`, allows exact trailing-zero representations, deduplicates identical duplicate dates deterministically, rejects conflicting duplicate dates, and never fabricates dates or forward-fills. The generic import service is benchmark-agnostic, requires an existing active Benchmark, accepts historical dates only, rejects current/future dates until provider finality is defined, inserts missing rows, is idempotent for same date/close/source, rejects close/source conflicts by default with `allow_revisions=False`, permits controlled revisions only with `allow_revisions=True`, preserves benchmark/date uniqueness and isolation, commits once and rolls back atomically on failure/conflict. Benchmark storage/import is ready. Generic Benchmark Comparison API is now implemented and validated at `GET /api/v1/portfolios/{portfolio_id}/benchmark-comparison?benchmark_code=...&start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`; it reuses the existing PortfolioPerformanceService/TWR unchanged, reads persisted BenchmarkPrice observations only, uses a hidden latest-real-observation baseline on or before `start_date - 1 day`, does not fabricate or forward-fill non-trading days, supports historical FX conversion into the portfolio base currency, and returns separate portfolio and benchmark normalized series plus cumulative benchmark return and excess return. BIST100 operational bootstrap/import tooling is now implemented and validated: supported metadata locks `BIST100` / `BIST 100` / `MARKET_INDEX` / `TRY` / `BORSA_ISTANBUL` / `PRICE_RETURN` with provider identity `YAHOO_FINANCE` and provider symbol `XU100.IS`; bootstrap is idempotent and conflict-safe, and a generic CSV CLI imports canonical `date,close` historical datasets through the existing validated BenchmarkPrice parser/import service. BIST100 is now operational with real persisted historical data in the current PostgreSQL environment: the supported `BIST100` Benchmark row is persisted with provider `YAHOO_FINANCE` / symbol `XU100.IS`, and 1,251 validated daily `BenchmarkPrice` observations covering 2021-09-06 through 2026-09-04 are persisted with source `DATA_TEAM_YAHOO_FINANCE_CLOSE`. The real persisted benchmark series were verified through the public Benchmark Comparison API end-to-end, including historical USD-to-TRY FX behavior for the USD benchmarks. Benchmark Catalog API is now implemented and validated at `GET /api/v1/benchmarks`; authentication is required and the endpoint exposes the active persisted benchmark catalog with deterministic ordering and public metadata only. Benchmark Daily Scheduled Sync + completed-close finality is now implemented and validated for BIST100, SP500 and NASDAQ100 through an isolated Yahoo Finance/yfinance integration. The sync fetches only completed historical daily Close observations, preserves the existing historical-only import guard, rejects future reference dates and out-of-range provider rows, performs Decimal 8dp canonicalization, never fabricates non-trading dates or automatically revises existing history, and persists new daily rows with source `YAHOO_FINANCE_DAILY_CLOSE`. TEFAS benchmark implementation, individual-stock comparison, TWR behavior changes and comparison-result persistence remain outside this slice. No portfolio-level Realized P/L total, FX/base-currency conversion, market-price dependency, percentage/return, from/to period behavior, fees/taxes or schema change outside the provider-independent benchmark storage foundation was added.
-- **Status updated:** 2026-09-07
+- **Status updated:** 2026-09-08
 
 ## Product summary
 
@@ -80,7 +80,7 @@ tests/
 | TEFAS capability/gap analysis | Complete | Direct vs derived vs unavailable vs external-source-needed decisions documented for the data team |
 | Official TEFAS risk value | Complete / merged | `profilData["riskDegeri"]` is normalized to `risk_value: int | None`, validated to 1..7 and persisted in detail snapshots |
 | External source decision | Complete for current MVP | TEFAS is primary; KAP is preferred official supplementary source when needed; FVT is not a required backend dependency |
-| AI integration | Not started in backend | Analytics, sentiment and report-Q&A integration remain later-stage work |
+| AI integration | Implemented / validated | AI integration foundation, immutable AIAnalysis persistence, Portfolio Analysis, Robustness, AI Analysis History/Read, Report Upload persistence and Report Q&A backend orchestration are implemented and validated. Live two-service acceptance remains dependent on the external AI service. Standalone AI Sentiment and AI Chat orchestration remain separate pending-contract work. |
 | Frontend integration | Not started in backend | Stable backend contracts will be provided as domains are finalized |
 
 ## Authentication and portfolio API
@@ -564,7 +564,7 @@ Remaining backend work is intentionally separated as follows:
 
 - **BLOCKED - precious metals:** Gold, silver and platinum provider integration remains blocked until the data-integration owner confirms the canonical provider/source, provider identifiers, native currency and raw price unit. Backend must not infer these values. After that contract is confirmed, the remaining backend work is provider adapter/integration, historical and daily AssetPrice synchronization, and precious-metal valuation/P&L support.
 - **BACKEND TODO after precious-metal valuation:** PortfolioSnapshot generation remains pending. Snapshots must remain derived dated calculated results and must not replace Transaction, PortfolioCashFlow or dynamic historical valuation as source of truth. Multi-currency TRY/USD/EUR/GBP snapshot calculation semantics must be finalized before generation is wired.
-- **CROSS-TEAM / BACKEND TODO:** `AIAnalysis`, `ExpertSource`, `UserExpertSource`, `SentimentPost`, `ReportDocument` and `ReportChunk` remain unresolved planned entities. AI/sentiment/RAG algorithms and their data contracts belong to the AI workstream, but backend ownership, authorization, persistence, API contracts, upload validation and integration boundaries remain backend responsibilities once those contracts are known.
+- **CROSS-TEAM / BACKEND TODO:** `AIAnalysis`, `ReportDocument` and `ReportChunk` are implemented and validated. `ExpertSource`, `UserExpertSource` and `SentimentPost` are implemented and validated in the Sentiment / Expert Source Foundation. Remaining cross-team work is operational X/Twitter post fetching plus standalone AI Sentiment and any approved AI Chat orchestration. Backend remains responsible for ownership, authorization, persistence and stable API/integration contracts; provider access and AI model-specific contracts must not be guessed.
 - **OTHER TEAM / operational handoff:** External scheduling of the already implemented one-shot benchmark synchronization belongs to the shared data-integration runtime/environment and requires coordination rather than new benchmark-domain logic.
 - **INTENTIONALLY DEFERRED:** Unverified TEFAS metadata/field semantics, management-fee extensions without a concrete requirement, separate API-version module refactoring, and other provider-specific additions remain deferred rather than guessed.
 - **FINAL QA TODO:** Measure and document backend test coverage against the project requirement of at least 70% during final backend verification.
@@ -920,3 +920,78 @@ Status: COMPLETE - 2026-09-08
 - Full regression suite: 1827 passed with 12 existing non-blocking Starlette deprecation warnings.
 - compileall and git diff --check passed.
 - No migration added; Alembic head remains 20260908_0024.
+
+## Sentiment / Expert Source Foundation
+
+Status: IMPLEMENTED / VALIDATED - 2026-09-08
+
+- Added provider-agnostic expert-source and social-content backend foundation.
+- Added `ExpertSource` as the system/data catalog of followable expert accounts.
+  - Stores `source_key`, nullable `author_name`, required `author_handle`, nullable `profile_url`, `is_active` and timestamps.
+  - `source_key` must be uppercase.
+  - `(source_key, author_handle)` is unique.
+  - The schema is not database-locked to X/Twitter; future providers require explicit approved source keys.
+- Added user-owned `UserExpertSource`.
+  - Represents which expert/account an authenticated user follows/configures.
+  - `(user_id, expert_source_id)` is unique.
+  - `is_enabled` controls whether that source contributes to the user's feed.
+- Added global `SentimentPost`.
+  - Posts are source content and are not user-owned.
+  - Stores `expert_source_id`, `source_key`, nullable `external_id`, nullable `url`, nullable `canonical_url`, nullable `title`, `content`, nullable author metadata, `published_at`, `fetched_at`, `content_type`, `language` and `created_at`.
+  - `content_type` is constrained to `NEWS`, `RSS` or `SOCIAL`.
+  - Every post must have either `external_id` or `canonical_url`.
+- Added database-level source integrity:
+  - `sentiment_posts(expert_source_id, source_key)` references `expert_sources(id, source_key)`.
+  - `ExpertSource` therefore also has unique `(id, source_key)`.
+  - This prevents a post from being persisted with an `expert_source_id` belonging to a different `source_key`.
+- Added duplicate protection:
+  - unique `(source_key, external_id)` where `external_id IS NOT NULL`
+  - fallback unique `(source_key, canonical_url)` where `external_id IS NULL AND canonical_url IS NOT NULL`
+  - PostgreSQL and SQLite test behavior are both supported.
+- Added authenticated public APIs:
+  - `GET /api/v1/expert-sources`
+  - `GET /api/v1/user-expert-sources`
+  - `POST /api/v1/user-expert-sources`
+  - `PATCH /api/v1/user-expert-sources/{user_expert_source_id}`
+  - `GET /api/v1/sentiment/posts`
+- `GET /api/v1/expert-sources` exposes only active catalog sources.
+- User expert-source create accepts only `expert_source_id`; `user_id` always comes from the authenticated user.
+- Missing/inactive expert source on create returns 404 `Expert source not found.`.
+- Duplicate user/source configuration returns 409 `Expert source is already configured for user.`.
+- PATCH lookup is scoped by relation ID plus authenticated user ID.
+- Missing or cross-user relation returns 404 `User expert source not found.`.
+- Re-enabling a relation requires the underlying ExpertSource to still be active.
+- Sentiment feed includes a post only when:
+  - the authenticated user follows the related ExpertSource,
+  - `UserExpertSource.is_enabled = true`,
+  - `ExpertSource.is_active = true`.
+- Feed ordering is deterministic by `published_at DESC`, then `id DESC`.
+- Public sentiment responses intentionally do not expose `external_id`, `canonical_url`, `user_id`, provider credentials or other internal identity fields.
+- The foundation intentionally does not add:
+  - real X/Twitter API connector,
+  - external post fetching,
+  - scheduler,
+  - RSS/news scraping,
+  - standalone AI sentiment orchestration,
+  - sentiment scoring/model calls,
+  - real ExpertSource seed/catalog population.
+- Alembic migration `20260908_0025`, following `20260908_0024`, adds the Sentiment / Expert Source persistence foundation.
+- Real PostgreSQL migration round-trip passed:
+  - `0024 -> 0025`
+  - `0025 -> 0024`
+  - `0024 -> 0025`
+- Focused Sentiment Foundation tests: **15 passed**.
+- GPT-5.6 Sol High security/data-integrity review initially identified test-evidence gaps for cross-user feed isolation and inactive-source exclusion; both regressions were added without production-code changes.
+- GPT-5.6 Sol High re-review: **PASS**, with no merge-blocking findings.
+- Related Sentiment + Watchlist regression: **29 passed**.
+- Full backend regression suite: **1842 passed** with **12 existing non-blocking Starlette `HTTP_422_UNPROCESSABLE_ENTITY` deprecation warnings**.
+- Real PostgreSQL + actual Uvicorn HTTP smoke: **PASS**.
+  - Verified temporary user registration and login.
+  - Verified active ExpertSource catalog visibility.
+  - Verified authenticated follow creation and user-scoped listing.
+  - Verified enabled-source post visibility in the sentiment feed.
+  - Verified public feed does not expose `external_id` or `canonical_url`.
+  - Verified PATCH disable removes the post from both feed `items` and `total`.
+  - Verified cleanup left zero temporary User, UserExpertSource, SentimentPost and ExpertSource rows.
+- Current feature branch: `kayra/sentiment-foundation`.
+- Technical implementation and verification are complete; remaining feature-close work is final diff/scope review, explicit staging, commit, push, PR, merge, main synchronization and branch cleanup.

@@ -24,6 +24,9 @@ from src.controller.benchmark_comparison_controller import router as benchmark_c
 from src.controller.cost_basis_controller import router as cost_basis_router
 from src.controller.data_sync_status_controller import router as data_sync_status_router
 from src.controller.health_controller import router as health_router
+from src.controller.expert_source_controller import router as expert_source_router
+from src.controller.user_expert_source_controller import router as user_expert_source_router
+from src.controller.sentiment_post_controller import router as sentiment_post_router
 from src.controller.holding_controller import router as holding_router
 from src.controller.note_controller import router as note_router
 from src.controller.portfolio_cash_flow_controller import router as portfolio_cash_flow_router
@@ -55,6 +58,9 @@ app.include_router(ai_portfolio_analysis_router)
 app.include_router(ai_robustness_router)
 app.include_router(auth_router)
 app.include_router(report_router)
+app.include_router(expert_source_router)
+app.include_router(user_expert_source_router)
+app.include_router(sentiment_post_router)
 app.include_router(asset_router)
 app.include_router(portfolio_router)
 app.include_router(portfolio_cash_flow_router)
