@@ -892,3 +892,31 @@ Status: COMPLETE - 2026-09-08
 - Final Alembic head: 20260908_0024.
 - compileall and git diff --check passed.
 - Report Q&A, embeddings/vector search, and AI service calls are intentionally outside this foundation slice.
+
+## Report Q&A API
+
+Status: COMPLETE - 2026-09-08
+
+- Added authenticated Report Q&A endpoint:
+  - POST /api/v1/reports/{report_id}/questions
+- Request accepts only a normalized nonblank query with maximum length 2000; backend-owned context fields are rejected.
+- Report ownership is verified using report_id plus authenticated user_id before loading chunks or invoking AI.
+- Missing and cross-user reports both return 404 "Report not found."
+- Q&A uses only persisted ReportChunk rows ordered deterministically by chunk_index ASC, id ASC; PDFs are not re-read or re-parsed.
+- Backend calls POST /api/ai/report-qa with authenticated user_id, normalized query, owned report metadata, and persisted page-numbered chunks.
+- Storage keys, SHA-256, filesystem paths, PDF binary, and unrelated DB fields are not sent to AI.
+- Canonical citation shape is strictly limited to report_id, chunk_id, page_number, and report_name.
+- Citation integer fields use strict JSON integer validation; numeric strings, floats, and booleans are rejected.
+- Every citation is cross-validated only against the already-owned report and exact chunk set sent to AI.
+- Fabricated, foreign, not-sent, or mismatched citations return 502 "AI service returned an invalid response." and are not persisted.
+- Raw chunk text, query, snippets, storage metadata, and arbitrary AI extras are not exposed or duplicated into AIAnalysis persistence.
+- Successful calls persist exactly one immutable AIAnalysis with analysis_type "report-qa" and portfolio_id NULL.
+- AIAnalysis result_payload contains only report_id, validated citations, confidence_score, and suggested_followups; answer, disclaimer, and model_version are stored in their dedicated fields and formula_version remains NULL.
+- AI unavailable errors map to 503; AI request/response failures map to stable 502 responses without exposing raw AI error bodies.
+- Repeated successful questions append separate immutable AIAnalysis rows.
+- AI team citation contract was finalized as report_id + chunk_id + page_number + report_name with no snippet/text/storage/internal fields.
+- GPT-5.6 Sol High security/grounding review found one strict-integer citation blocker; it was fixed and focused re-review passed.
+- Focused Report Q&A tests: 44 passed.
+- Full regression suite: 1827 passed with 12 existing non-blocking Starlette deprecation warnings.
+- compileall and git diff --check passed.
+- No migration added; Alembic head remains 20260908_0024.
