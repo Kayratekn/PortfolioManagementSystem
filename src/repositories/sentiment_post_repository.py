@@ -41,3 +41,37 @@ class SentimentPostRepository:
     def count_for_user_enabled_sources(self, *, user_id: int) -> int:
         statement = select(func.count(SentimentPost.id)).select_from(SentimentPost).join(ExpertSource, ExpertSource.id == SentimentPost.expert_source_id).join(UserExpertSource, UserExpertSource.expert_source_id == ExpertSource.id).where(UserExpertSource.user_id == user_id, UserExpertSource.is_enabled.is_(True), ExpertSource.is_active.is_(True))
         return int(self.db.scalar(statement) or 0)
+    def list_for_user_enabled_social_posts_since(
+        self,
+        *,
+        user_id: int,
+        published_since: datetime,
+    ) -> list[SentimentPostFeedItem]:
+        statement = (
+            select(
+                SentimentPost.id,
+                SentimentPost.expert_source_id,
+                SentimentPost.source_key,
+                SentimentPost.title,
+                SentimentPost.content,
+                SentimentPost.author_name,
+                SentimentPost.author_handle,
+                SentimentPost.url,
+                SentimentPost.published_at,
+                SentimentPost.fetched_at,
+                SentimentPost.content_type,
+                SentimentPost.language,
+            )
+            .join(ExpertSource, ExpertSource.id == SentimentPost.expert_source_id)
+            .join(UserExpertSource, UserExpertSource.expert_source_id == ExpertSource.id)
+            .where(
+                UserExpertSource.user_id == user_id,
+                UserExpertSource.is_enabled.is_(True),
+                ExpertSource.is_active.is_(True),
+                ExpertSource.source_key == "X",
+                SentimentPost.content_type == "SOCIAL",
+                SentimentPost.published_at >= published_since,
+            )
+            .order_by(SentimentPost.published_at.desc(), SentimentPost.id.desc())
+        )
+        return [SentimentPostFeedItem(*row) for row in self.db.execute(statement).all()]
