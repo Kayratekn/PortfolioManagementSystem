@@ -12,7 +12,7 @@ class DataSyncRun(TimestampMixin, Base):
     __tablename__ = "data_sync_runs"
     __table_args__ = (
         CheckConstraint(
-            "sync_type IN ('TEFAS_DAILY', 'BENCHMARK_DAILY')",
+            "sync_type IN ('TEFAS_DAILY', 'BENCHMARK_DAILY', 'BIST_REFERENCE_PRICES_DAILY')",
             name="ck_data_sync_runs_sync_type_allowed",
         ),
         CheckConstraint(

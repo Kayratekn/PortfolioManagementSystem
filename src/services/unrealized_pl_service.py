@@ -12,7 +12,10 @@ from src.services.market_data_freshness import (
     MarketDataFreshness,
     observed_market_data_freshness,
 )
-from src.services.tefas_valuation_price_service import TefasValuationPriceService
+from src.services.valuation_price_service import (
+    ValuationPriceService,
+    is_supported_valuation_asset,
+)
 
 
 ITEM_STATUS_COMPLETE = "COMPLETE"
@@ -62,11 +65,11 @@ class UnrealizedPlService:
         self,
         cost_basis_service: CostBasisService,
         transaction_repository: TransactionRepository,
-        tefas_valuation_price_service: TefasValuationPriceService,
+        tefas_valuation_price_service: ValuationPriceService,
     ) -> None:
         self.cost_basis_service = cost_basis_service
         self.transaction_repository = transaction_repository
-        self.tefas_valuation_price_service = tefas_valuation_price_service
+        self.valuation_price_service = tefas_valuation_price_service
 
     def get_unrealized_pl(
         self,
@@ -133,7 +136,7 @@ class UnrealizedPlService:
             )
         self._validate_cost_basis_item(cost_basis_item)
 
-        if not self._is_supported_tefas_fund(asset):
+        if not self._is_supported_valuation_asset(asset):
             return self._unavailable_item(
                 asset=asset,
                 quantity=holding_quantity,
@@ -142,7 +145,7 @@ class UnrealizedPlService:
                 unavailable_reason=REASON_UNSUPPORTED_ASSET,
             )
 
-        valuation_price = self.tefas_valuation_price_service.get_price(
+        valuation_price = self.valuation_price_service.get_price(
             asset=asset,
             valuation_date=as_of_date,
         )
@@ -247,13 +250,8 @@ class UnrealizedPlService:
         raise ValueError("Unexpected Cost Basis item status.")
 
     @staticmethod
-    def _is_supported_tefas_fund(asset: Asset) -> bool:
-        return (
-            asset.data_source == TEFAS_SOURCE
-            and asset.asset_type == SUPPORTED_ASSET_TYPE
-            and asset.fund_kind in SUPPORTED_TEFAS_FUND_KINDS
-        )
-
+    def _is_supported_valuation_asset(asset: Asset) -> bool:
+        return is_supported_valuation_asset(asset)
     @staticmethod
     def _unavailable_item(
         *,

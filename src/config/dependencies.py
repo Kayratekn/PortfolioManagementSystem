@@ -12,6 +12,7 @@ from src.config.settings import get_settings
 from src.integrations.ai_client import AiClient
 from src.repositories.ai_analysis_repository import AiAnalysisRepository
 from src.repositories.asset_repository import AssetRepository
+from src.repositories.asset_price_repository import AssetPriceRepository
 from src.repositories.benchmark_price_repository import BenchmarkPriceRepository
 from src.repositories.benchmark_repository import BenchmarkRepository
 from src.repositories.data_sync_run_repository import DataSyncRunRepository
@@ -60,6 +61,7 @@ from src.services.tefas_fund_metrics_service import TefasFundMetricsService
 from src.services.tefas_fund_metadata_read_service import TefasFundMetadataReadService
 from src.services.tefas_management_fee_read_service import TefasManagementFeeReadService
 from src.services.tefas_valuation_price_service import TefasValuationPriceService
+from src.services.valuation_price_service import ValuationPriceService
 from src.services.token_service import TokenService
 from src.services.transaction_service import TransactionService
 from src.services.unrealized_pl_service import UnrealizedPlService
@@ -109,6 +111,11 @@ def get_sentiment_post_repository(db: Annotated[Session, Depends(get_db)]) -> Se
 
 def get_asset_repository(db: Annotated[Session, Depends(get_db)]) -> AssetRepository:
     return AssetRepository(db)
+
+def get_asset_price_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> AssetPriceRepository:
+    return AssetPriceRepository(db)
 
 
 def get_transaction_repository(db: Annotated[Session, Depends(get_db)]) -> TransactionRepository:
@@ -479,6 +486,20 @@ def get_tefas_valuation_price_service(
     return TefasValuationPriceService(daily_data_repository)
 
 
+def get_valuation_price_service(
+    tefas_valuation_price_service: Annotated[
+        TefasValuationPriceService,
+        Depends(get_tefas_valuation_price_service),
+    ],
+    asset_price_repository: Annotated[
+        AssetPriceRepository,
+        Depends(get_asset_price_repository),
+    ],
+) -> ValuationPriceService:
+    return ValuationPriceService(
+        tefas_valuation_price_service=tefas_valuation_price_service,
+        asset_price_repository=asset_price_repository,
+    )
 def get_unrealized_pl_service(
     cost_basis_service: Annotated[
         CostBasisService,
@@ -489,8 +510,8 @@ def get_unrealized_pl_service(
         Depends(get_transaction_repository),
     ],
     tefas_valuation_price_service: Annotated[
-        TefasValuationPriceService,
-        Depends(get_tefas_valuation_price_service),
+        ValuationPriceService,
+        Depends(get_valuation_price_service),
     ],
 ) -> UnrealizedPlService:
     return UnrealizedPlService(
@@ -515,8 +536,8 @@ def get_portfolio_valuation_service(
         Depends(get_transaction_repository),
     ],
     tefas_valuation_price_service: Annotated[
-        TefasValuationPriceService,
-        Depends(get_tefas_valuation_price_service),
+        ValuationPriceService,
+        Depends(get_valuation_price_service),
     ],
     fx_conversion_service: Annotated[
         FxConversionService,
