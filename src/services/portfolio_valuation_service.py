@@ -21,7 +21,10 @@ from src.services.portfolio_cash_replay_service import (
     PORTFOLIO_CASH_REPLAY_STATUS_COMPLETE,
     PortfolioCashReplayService,
 )
-from src.services.tefas_valuation_price_service import TefasValuationPriceService
+from src.services.valuation_price_service import (
+    ValuationPriceService,
+    is_supported_valuation_asset,
+)
 
 
 ITEM_STATUS_COMPLETE = "COMPLETE"
@@ -95,13 +98,13 @@ class PortfolioValuationService:
         self,
         portfolio_repository: PortfolioRepository,
         transaction_repository: TransactionRepository,
-        tefas_valuation_price_service: TefasValuationPriceService,
+        tefas_valuation_price_service: ValuationPriceService,
         fx_conversion_service: FxConversionService,
         portfolio_cash_replay_service: PortfolioCashReplayService,
     ) -> None:
         self.portfolio_repository = portfolio_repository
         self.transaction_repository = transaction_repository
-        self.tefas_valuation_price_service = tefas_valuation_price_service
+        self.valuation_price_service = tefas_valuation_price_service
         self.fx_conversion_service = fx_conversion_service
         self.portfolio_cash_replay_service = portfolio_cash_replay_service
 
@@ -289,7 +292,7 @@ class PortfolioValuationService:
         base_currency: str,
         valuation_date: date,
     ) -> PortfolioValuationItem:
-        if not self._is_supported_tefas_fund(asset):
+        if not self._is_supported_valuation_asset(asset):
             return self._unavailable_item(
                 asset=asset,
                 quantity=quantity,
@@ -297,7 +300,7 @@ class PortfolioValuationService:
                 unavailable_reason=REASON_UNSUPPORTED_ASSET,
             )
 
-        valuation_price = self.tefas_valuation_price_service.get_price(
+        valuation_price = self.valuation_price_service.get_price(
             asset=asset,
             valuation_date=valuation_date,
         )
@@ -376,13 +379,8 @@ class PortfolioValuationService:
         )
 
     @staticmethod
-    def _is_supported_tefas_fund(asset: Asset) -> bool:
-        return (
-            asset.data_source == TEFAS_SOURCE
-            and asset.asset_type == SUPPORTED_ASSET_TYPE
-            and asset.fund_kind in SUPPORTED_TEFAS_FUND_KINDS
-        )
-
+    def _is_supported_valuation_asset(asset: Asset) -> bool:
+        return is_supported_valuation_asset(asset)
     @staticmethod
     def _unavailable_item(
         *,
