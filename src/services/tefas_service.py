@@ -960,11 +960,20 @@ class TefasService:
 
     @staticmethod
     def _normalize_optional_risk_value(value: Any, *, field_name: str) -> int | None:
+        if isinstance(value, str):
+            if value.strip() in {"-", "0"}:
+                return None
+
         normalized_value = TefasService._normalize_optional_integral_int(
             value,
             field_name=field_name,
         )
         if normalized_value is None:
+            return None
+
+        if normalized_value == 0:
+            if isinstance(value, str):
+                raise TefasServiceError(f"Invalid normalized field: {field_name}")
             return None
 
         if normalized_value < 1 or normalized_value > 7:
