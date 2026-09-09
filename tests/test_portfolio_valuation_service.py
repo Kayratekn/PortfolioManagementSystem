@@ -1509,3 +1509,126 @@ def test_total_market_value_and_asset_weights_remain_asset_only(db_session: Sess
     assert result.total_portfolio_value == Decimal("180.0000000000000000")
     assert result.items[0].weight == Decimal("0.25")
     assert result.items[1].weight == Decimal("0.75")
+def test_get_valuation_in_currency_converts_without_changing_portfolio_base_currency(
+    db_session: Session,
+) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(
+        db_session,
+        user_id=user.id,
+        base_currency="TRY",
+    )
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("400.00000000"),
+        currency="TRY",
+    )
+    _add_exchange_rate(
+        db_session,
+        base_currency="USD",
+        forex_buying=Decimal("39.00000000"),
+        forex_selling=Decimal("41.00000000"),
+    )
+
+    service = _create_service(db_session)
+
+    result = service.get_valuation_in_currency(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+        target_currency=" usd ",
+    )
+
+    assert portfolio.base_currency == "TRY"
+    assert result.base_currency == "USD"
+    assert result.status == "COMPLETE"
+    assert result.total_market_value == Decimal("0")
+    assert result.total_cash_value == Decimal("10.00000000")
+    assert result.total_portfolio_value == Decimal("10.00000000")
+    assert len(result.cash_items) == 1
+    assert result.cash_items[0].currency == "TRY"
+    assert result.cash_items[0].fx_rate == Decimal("1") / Decimal("40.00000000")
+
+
+def test_get_valuation_still_uses_portfolio_base_currency_after_target_currency_refactor(
+    db_session: Session,
+) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(
+        db_session,
+        user_id=user.id,
+        base_currency="TRY",
+    )
+    _add_cash_flow(
+        db_session,
+        portfolio_id=portfolio.id,
+        amount=Decimal("400.00000000"),
+        currency="TRY",
+    )
+
+    result = _create_service(db_session).get_valuation(
+        portfolio_id=portfolio.id,
+        current_user=user,
+        valuation_date=VALUATION_DATE,
+    )
+
+    assert result.base_currency == "TRY"
+    assert result.status == "COMPLETE"
+    assert result.total_cash_value == Decimal("400.00000000")
+    assert result.total_portfolio_value == Decimal("400.00000000")
+
+
+@pytest.mark.parametrize(
+    "target_currency",
+    ["JPY", "", "   "],
+)
+def test_get_valuation_in_currency_rejects_unsupported_target_currency(
+    db_session: Session,
+    target_currency: str,
+) -> None:
+    user = _create_user(db_session)
+    portfolio = _create_portfolio(
+        db_session,
+        user_id=user.id,
+        base_currency="TRY",
+    )
+
+    with pytest.raises(ValueError, match="Unsupported target currency"):
+        _create_service(db_session).get_valuation_in_currency(
+            portfolio_id=portfolio.id,
+            current_user=user,
+            valuation_date=VALUATION_DATE,
+            target_currency=target_currency,
+        )
+
+
+def test_get_valuation_in_currency_preserves_ownership_isolation(
+    db_session: Session,
+) -> None:
+    owner = _create_user(
+        db_session,
+        email="valuation-target-owner@example.com",
+        username="valuation-target-owner",
+    )
+    other_user = _create_user(
+        db_session,
+        email="valuation-target-other@example.com",
+        username="valuation-target-other",
+    )
+    portfolio = _create_portfolio(
+        db_session,
+        user_id=owner.id,
+        base_currency="TRY",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        _create_service(db_session).get_valuation_in_currency(
+            portfolio_id=portfolio.id,
+            current_user=other_user,
+            valuation_date=VALUATION_DATE,
+            target_currency="USD",
+        )
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Portfolio not found."

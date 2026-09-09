@@ -32,6 +32,7 @@ from src.controller.holding_controller import router as holding_router
 from src.controller.note_controller import router as note_router
 from src.controller.portfolio_cash_flow_controller import router as portfolio_cash_flow_router
 from src.controller.portfolio_controller import router as portfolio_router
+from src.controller.portfolio_snapshot_controller import router as portfolio_snapshot_router
 from src.controller.portfolio_valuation_controller import router as portfolio_valuation_router
 from src.controller.portfolio_performance_controller import router as portfolio_performance_router
 from src.controller.realized_pl_controller import router as realized_pl_router
@@ -66,6 +67,7 @@ app.include_router(sentiment_post_router)
 app.include_router(asset_router)
 app.include_router(portfolio_router)
 app.include_router(portfolio_cash_flow_router)
+app.include_router(portfolio_snapshot_router)
 app.include_router(transaction_router)
 app.include_router(watchlist_router)
 app.include_router(note_router)

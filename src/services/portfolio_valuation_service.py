@@ -10,7 +10,7 @@ from src.model.asset import Asset
 from src.model.user import User
 from src.repositories.portfolio_repository import PortfolioRepository
 from src.repositories.transaction_repository import TransactionRepository
-from src.services.fx_conversion_service import FxConversionService
+from src.services.fx_conversion_service import SUPPORTED_CURRENCIES, FxConversionService
 from src.services.market_data_freshness import (
     MarketDataFreshness,
     not_applicable_market_data_freshness,
@@ -125,13 +125,63 @@ class PortfolioValuationService:
                 detail="Portfolio not found.",
             )
 
+        return self._calculate_valuation(
+            portfolio_id=portfolio_id,
+            current_user=current_user,
+            valuation_date=valuation_date,
+            target_currency=portfolio.base_currency,
+        )
+
+    def get_valuation_in_currency(
+        self,
+        *,
+        portfolio_id: int,
+        current_user: User,
+        valuation_date: date,
+        target_currency: str,
+    ) -> PortfolioValuationResult:
+        portfolio = self.portfolio_repository.get_by_id_for_user(
+            portfolio_id,
+            current_user.id,
+        )
+        if portfolio is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Portfolio not found.",
+            )
+
+        normalized_target_currency = (
+            target_currency.strip().upper()
+            if isinstance(target_currency, str)
+            else ""
+        )
+        if normalized_target_currency not in SUPPORTED_CURRENCIES:
+            raise ValueError(
+                f"Unsupported target currency: {normalized_target_currency or target_currency}"
+            )
+
+        return self._calculate_valuation(
+            portfolio_id=portfolio_id,
+            current_user=current_user,
+            valuation_date=valuation_date,
+            target_currency=normalized_target_currency,
+        )
+
+    def _calculate_valuation(
+        self,
+        *,
+        portfolio_id: int,
+        current_user: User,
+        valuation_date: date,
+        target_currency: str,
+    ) -> PortfolioValuationResult:
         holdings = self.transaction_repository.list_holdings_by_portfolio_on_or_before(
             portfolio_id=portfolio_id,
             transaction_date=valuation_date,
         )
         asset_items, asset_status, total_market_value = self._build_asset_valuation(
             holdings=holdings,
-            base_currency=portfolio.base_currency,
+            base_currency=target_currency,
             valuation_date=valuation_date,
         )
 
@@ -144,7 +194,7 @@ class PortfolioValuationService:
             self._build_cash_item(
                 currency=balance.currency,
                 amount=balance.amount,
-                base_currency=portfolio.base_currency,
+                base_currency=target_currency,
                 valuation_date=valuation_date,
             )
             for balance in cash_replay.balances
@@ -152,7 +202,9 @@ class PortfolioValuationService:
         cash_has_unavailable_item = any(
             item.status == ITEM_STATUS_UNAVAILABLE for item in cash_items
         )
-        cash_replay_is_complete = cash_replay.status == PORTFOLIO_CASH_REPLAY_STATUS_COMPLETE
+        cash_replay_is_complete = (
+            cash_replay.status == PORTFOLIO_CASH_REPLAY_STATUS_COMPLETE
+        )
         if cash_replay_is_complete and not cash_has_unavailable_item:
             total_cash_value = sum(
                 (item.market_value for item in cash_items),
@@ -167,17 +219,23 @@ class PortfolioValuationService:
             and not cash_has_unavailable_item
         )
         portfolio_status = (
-            PORTFOLIO_STATUS_COMPLETE if is_complete else PORTFOLIO_STATUS_INCOMPLETE
+            PORTFOLIO_STATUS_COMPLETE
+            if is_complete
+            else PORTFOLIO_STATUS_INCOMPLETE
         )
         total_portfolio_value = (
             total_market_value + total_cash_value
-            if is_complete and total_market_value is not None and total_cash_value is not None
+            if (
+                is_complete
+                and total_market_value is not None
+                and total_cash_value is not None
+            )
             else None
         )
 
         return PortfolioValuationResult(
             portfolio_id=portfolio_id,
-            base_currency=portfolio.base_currency,
+            base_currency=target_currency,
             valuation_date=valuation_date,
             status=portfolio_status,
             total_market_value=total_market_value,

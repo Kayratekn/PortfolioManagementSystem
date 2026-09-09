@@ -23,6 +23,7 @@ from src.repositories.user_expert_source_repository import UserExpertSourceRepos
 from src.repositories.note_repository import NoteRepository
 from src.repositories.portfolio_cash_flow_repository import PortfolioCashFlowRepository
 from src.repositories.portfolio_repository import PortfolioRepository
+from src.repositories.portfolio_snapshot_repository import PortfolioSnapshotRepository
 from src.repositories.report_repository import ReportRepository
 from src.repositories.tefas_fund_allocation_data_repository import TefasFundAllocationDataRepository
 from src.repositories.tefas_fund_daily_data_repository import TefasFundDailyDataRepository
@@ -51,6 +52,7 @@ from src.services.portfolio_cash_flow_service import PortfolioCashFlowService
 from src.services.portfolio_cash_replay_service import PortfolioCashReplayService
 from src.services.portfolio_performance_service import PortfolioPerformanceService
 from src.services.portfolio_service import PortfolioService
+from src.services.portfolio_snapshot_service import PortfolioSnapshotService
 from src.services.portfolio_valuation_service import PortfolioValuationService
 from src.services.realized_pl_service import RealizedPlService
 from src.services.report_qa_service import ReportQaService
@@ -84,6 +86,12 @@ def get_user_repository(db: Annotated[Session, Depends(get_db)]) -> UserReposito
 
 def get_portfolio_repository(db: Annotated[Session, Depends(get_db)]) -> PortfolioRepository:
     return PortfolioRepository(db)
+
+
+def get_portfolio_snapshot_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> PortfolioSnapshotRepository:
+    return PortfolioSnapshotRepository(db)
 
 
 def get_note_repository(db: Annotated[Session, Depends(get_db)]) -> NoteRepository:
@@ -554,6 +562,26 @@ def get_portfolio_valuation_service(
         tefas_valuation_price_service=tefas_valuation_price_service,
         fx_conversion_service=fx_conversion_service,
         portfolio_cash_replay_service=portfolio_cash_replay_service,
+    )
+
+
+def get_portfolio_snapshot_service(
+    db: Annotated[Session, Depends(get_db)],
+    portfolio_repository: Annotated[PortfolioRepository, Depends(get_portfolio_repository)],
+    portfolio_snapshot_repository: Annotated[
+        PortfolioSnapshotRepository,
+        Depends(get_portfolio_snapshot_repository),
+    ],
+    portfolio_valuation_service: Annotated[
+        PortfolioValuationService,
+        Depends(get_portfolio_valuation_service),
+    ],
+) -> PortfolioSnapshotService:
+    return PortfolioSnapshotService(
+        db=db,
+        portfolio_repository=portfolio_repository,
+        portfolio_snapshot_repository=portfolio_snapshot_repository,
+        portfolio_valuation_service=portfolio_valuation_service,
     )
 
 
