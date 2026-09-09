@@ -1276,6 +1276,36 @@ def test_get_fund_detail_page_metadata_parses_matching_profil_data_risk_value() 
     assert result.risk_value == 1
 
 
+@pytest.mark.parametrize(
+    ("raw_value", "expected_value"),
+    [(1, 1), (" 2 ", 2), (3.0, 3), ("4.0", 4), (5, 5), (6, 6), (7, 7)],
+)
+def test_normalize_optional_risk_value_accepts_integral_values_in_range(
+    raw_value: object,
+    expected_value: int,
+) -> None:
+    assert (
+        TefasService._normalize_optional_risk_value(
+            raw_value,
+            field_name="risk_value",
+        )
+        == expected_value
+    )
+
+
+@pytest.mark.parametrize("raw_value", [0, 0.0, Decimal("0")])
+def test_normalize_optional_risk_value_allows_numeric_zero_sentinel(
+    raw_value: object,
+) -> None:
+    assert (
+        TefasService._normalize_optional_risk_value(
+            raw_value,
+            field_name="risk_value",
+        )
+        is None
+    )
+
+
 def test_get_fund_detail_page_metadata_parses_matching_profil_data_isin() -> None:
     service, _ = _service_with_detail_page_html(
         "<html><script>"
@@ -1768,27 +1798,54 @@ def test_get_fund_detail_page_metadata_allows_null_optional_numeric_fields() -> 
     assert result.market_share_raw is None
 
 
-def test_get_fund_detail_page_metadata_allows_null_or_missing_risk_value() -> None:
-    for profil_data_json in [
+@pytest.mark.parametrize(
+    "profil_data_json",
+    [
         '{"fonKodu":"AAL","riskDegeri":null}',
         '{"fonKodu":"AAL"}',
-    ]:
-        service, _ = _service_with_detail_page_html(
-            "<html><script>"
-            '{"props":{"pageProps":{'
-            '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
-            '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
-            f'"profilData":{profil_data_json}'
-            "}}}"
-            "</script></html>"
-        )
+        '{"fonKodu":"AAL","riskDegeri":" - "}',
+        '{"fonKodu":"AAL","riskDegeri":"0"}',
+        '{"fonKodu":"AAL","riskDegeri":" 0 "}',
+        '{"fonKodu":"AAL","riskDegeri":0}',
+    ],
+)
+def test_get_fund_detail_page_metadata_allows_risk_value_sentinels(
+    profil_data_json: str,
+) -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        f'"profilData":{profil_data_json}'
+        "}}}"
+        "</script></html>"
+    )
 
-        result = service.get_fund_detail_page_metadata(fund_code="AAL")
+    result = service.get_fund_detail_page_metadata(fund_code="AAL")
 
-        assert result.risk_value is None
+    assert result.risk_value is None
 
 
-@pytest.mark.parametrize("risk_value", ["bad", "1.5", "0", "8", True])
+@pytest.mark.parametrize("risk_value", ["0.0", "+0", "-0", "00", "0e3"])
+def test_get_fund_detail_page_metadata_rejects_unsupported_risk_zero_strings(
+    risk_value: str,
+) -> None:
+    service, _ = _service_with_detail_page_html(
+        "<html><script>"
+        '{"props":{"pageProps":{'
+        '"bilgiData":{"fonKodu":"AAL","fonKategori":"Para Piyasas? Fonu",'
+        '"kategoriDerece":71,"kategoriFonSay":84,"pazarPayi":0.11},'
+        f'"profilData":{{"fonKodu":"AAL","riskDegeri":{json.dumps(risk_value)}}}'
+        "}}}"
+        "</script></html>"
+    )
+
+    with pytest.raises(TefasServiceError, match="risk_value"):
+        service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+@pytest.mark.parametrize("risk_value", ["bad", "1.5", 1.5, -1, 8, True, False])
 def test_get_fund_detail_page_metadata_rejects_invalid_risk_value(risk_value: object) -> None:
     service, _ = _service_with_detail_page_html(
         "<html><script>"
@@ -1802,6 +1859,28 @@ def test_get_fund_detail_page_metadata_rejects_invalid_risk_value(risk_value: ob
 
     with pytest.raises(TefasServiceError, match="risk_value"):
         service.get_fund_detail_page_metadata(fund_code="AAL")
+
+
+@pytest.mark.parametrize(
+    "risk_value",
+    [
+        Decimal("1.5"),
+        Decimal("NaN"),
+        Decimal("Infinity"),
+        Decimal("-Infinity"),
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+)
+def test_normalize_optional_risk_value_rejects_non_finite_or_non_integral_values(
+    risk_value: object,
+) -> None:
+    with pytest.raises(TefasServiceError, match="risk_value"):
+        TefasService._normalize_optional_risk_value(
+            risk_value,
+            field_name="risk_value",
+        )
 
 
 def test_get_fund_detail_page_metadata_raises_when_bilgi_data_missing() -> None:
