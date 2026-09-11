@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.model.report_chunk import ReportChunk
@@ -37,6 +37,20 @@ class ReportRepository:
             ReportDocument.user_id == user_id,
         )
         return self.db.scalar(statement)
+
+    def list_documents_by_user(self, *, user_id: int, skip: int, limit: int) -> list[ReportDocument]:
+        statement = (
+            select(ReportDocument)
+            .where(ReportDocument.user_id == user_id)
+            .order_by(ReportDocument.created_at.desc(), ReportDocument.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(self.db.scalars(statement))
+
+    def count_documents_by_user(self, *, user_id: int) -> int:
+        statement = select(func.count(ReportDocument.id)).where(ReportDocument.user_id == user_id)
+        return int(self.db.scalar(statement) or 0)
 
     def list_chunks_by_document_id(self, *, report_document_id: int) -> list[ReportChunk]:
         statement = (
