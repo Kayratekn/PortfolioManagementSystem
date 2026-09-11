@@ -15,6 +15,18 @@ class NoteRepository:
         self.db.flush()
         return note
 
+    def get_by_id_for_user(self, *, note_id: int, user_id: int) -> Note | None:
+        statement = select(Note).where(Note.id == note_id, Note.user_id == user_id)
+        return self.db.scalar(statement)
+
+    def update(self, note: Note) -> Note:
+        self.db.flush()
+        return note
+
+    def delete(self, note: Note) -> None:
+        self.db.delete(note)
+        self.db.flush()
+
     def list_by_user(self, *, user_id: int, skip: int, limit: int) -> list[Note]:
         statement = (
             select(Note)

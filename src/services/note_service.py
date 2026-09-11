@@ -45,3 +45,30 @@ class NoteService:
             skip=skip,
             limit=limit,
         )
+
+    def update_note(self, *, note_id: int, note_text: str, current_user: User) -> NoteResponse:
+        note = self._get_owned_note(note_id=note_id, current_user=current_user)
+        note.note_text = note_text
+        try:
+            updated_note = self.note_repository.update(note)
+            self.db.commit()
+            self.db.refresh(updated_note)
+        except Exception:
+            self.db.rollback()
+            raise
+        return NoteResponse.model_validate(updated_note)
+
+    def delete_note(self, *, note_id: int, current_user: User) -> None:
+        note = self._get_owned_note(note_id=note_id, current_user=current_user)
+        try:
+            self.note_repository.delete(note)
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def _get_owned_note(self, *, note_id: int, current_user: User) -> Note:
+        note = self.note_repository.get_by_id_for_user(note_id=note_id, user_id=current_user.id)
+        if note is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found.")
+        return note

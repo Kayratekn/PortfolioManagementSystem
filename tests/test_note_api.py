@@ -170,9 +170,97 @@ def test_api_validation_422(client) -> None:
         assert response.status_code == 422
 
 
-def test_api_does_not_expose_patch_delete_search_routes(client) -> None:
+def test_api_patch_success_exact_public_fields_and_delete_204(client) -> None:
     register_user(client, email="note-routes@example.com", username="note-routes")
     token = login_user(client, email="note-routes@example.com")
+    portfolio = create_portfolio(client, token)
+    created = client.post(
+        "/api/v1/notes",
+        json={"portfolio_id": portfolio["id"], "note_text": "before"},
+        headers=headers(token),
+    ).json()
 
-    assert client.patch("/api/v1/notes/1", json={"note_text": "x"}, headers=headers(token)).status_code == 404
-    assert client.delete("/api/v1/notes/1", headers=headers(token)).status_code == 404
+    patch_response = client.patch(
+        f"/api/v1/notes/{created['id']}",
+        json={"note_text": "  updated  "},
+        headers=headers(token),
+    )
+    delete_response = client.delete(f"/api/v1/notes/{created['id']}", headers=headers(token))
+
+    assert patch_response.status_code == 200
+    assert set(patch_response.json()) == {"id", "portfolio_id", "note_text", "created_at"}
+    assert patch_response.json()["note_text"] == "updated"
+    assert patch_response.json()["portfolio_id"] == portfolio["id"]
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+
+def test_api_patch_delete_auth_ownership_and_missing_note_behavior(client) -> None:
+    register_user(client, email="note-owner-edit@example.com", username="note-owner-edit")
+    owner_token = login_user(client, email="note-owner-edit@example.com")
+    register_user(client, email="note-other-edit@example.com", username="note-other-edit")
+    other_token = login_user(client, email="note-other-edit@example.com")
+    portfolio = create_portfolio(client, owner_token)
+    created = client.post(
+        "/api/v1/notes",
+        json={"portfolio_id": portfolio["id"], "note_text": "owned"},
+        headers=headers(owner_token),
+    ).json()
+
+    for response in [
+        client.patch(f"/api/v1/notes/{created['id']}", json={"note_text": "x"}),
+        client.delete(f"/api/v1/notes/{created['id']}"),
+    ]:
+        assert response.status_code == 401
+
+    foreign_patch_response = client.patch(
+        f"/api/v1/notes/{created['id']}",
+        json={"note_text": "x"},
+        headers=headers(other_token),
+    )
+    assert foreign_patch_response.status_code == 404
+    assert foreign_patch_response.json()["detail"] == "Note not found."
+    assert client.get("/api/v1/notes", headers=headers(owner_token)).json()["items"][0]["note_text"] == "owned"
+
+    foreign_delete_response = client.delete(f"/api/v1/notes/{created['id']}", headers=headers(other_token))
+    assert foreign_delete_response.status_code == 404
+    assert foreign_delete_response.json()["detail"] == "Note not found."
+    assert client.get("/api/v1/notes", headers=headers(owner_token)).json()["items"][0]["id"] == created["id"]
+
+    for response in [
+        client.patch("/api/v1/notes/999999", json={"note_text": "x"}, headers=headers(owner_token)),
+        client.delete("/api/v1/notes/999999", headers=headers(owner_token)),
+    ]:
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Note not found."
+
+
+def test_api_patch_validation_and_deleted_portfolio_note_is_editable_and_deletable(client, db_session: Session) -> None:
+    register_user(client, email="note-edit-validation@example.com", username="note-edit-validation")
+    token = login_user(client, email="note-edit-validation@example.com")
+    portfolio = create_portfolio(client, token)
+    created = client.post(
+        "/api/v1/notes",
+        json={"portfolio_id": portfolio["id"], "note_text": "before"},
+        headers=headers(token),
+    ).json()
+
+    for payload in [
+        {},
+        {"note_text": "   "},
+        {"note_text": "a" * 2001},
+        {"note_text": "updated", "portfolio_id": portfolio["id"]},
+        {"note_text": "updated", "user_id": 1},
+    ]:
+        assert client.patch(f"/api/v1/notes/{created['id']}", json=payload, headers=headers(token)).status_code == 422
+
+    persisted_portfolio = db_session.get(Portfolio, portfolio["id"])
+    persisted_portfolio.deleted_at = datetime(2026, 9, 7, tzinfo=timezone.utc)
+    db_session.commit()
+
+    assert client.patch(
+        f"/api/v1/notes/{created['id']}",
+        json={"note_text": "after deletion"},
+        headers=headers(token),
+    ).status_code == 200
+    assert client.delete(f"/api/v1/notes/{created['id']}", headers=headers(token)).status_code == 204

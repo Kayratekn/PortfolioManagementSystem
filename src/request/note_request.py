@@ -17,3 +17,16 @@ class NoteCreateRequest(BaseModel):
         if isinstance(value, str):
             return value.strip()
         return value
+
+
+class NoteUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note_text: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("note_text", mode="before")
+    @classmethod
+    def trim_note_text(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
