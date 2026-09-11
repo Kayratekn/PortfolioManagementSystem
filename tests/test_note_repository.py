@@ -97,3 +97,57 @@ def test_repository_add_flushes_but_does_not_commit(db_session: Session, monkeyp
 
     assert created.id is not None
     assert commit_calls == 0
+
+
+def test_repository_get_by_owner_update_flushes_without_commit(db_session: Session, monkeypatch) -> None:
+    user = add_user(db_session)
+    other = add_user(db_session, email="other@example.com", username="other")
+    portfolio = add_portfolio(db_session, user_id=user.id)
+    note = add_note(
+        db_session,
+        user_id=user.id,
+        portfolio_id=portfolio.id,
+        note_text="before",
+        created_at=datetime(2026, 9, 7, tzinfo=timezone.utc),
+    )
+    repository = NoteRepository(db_session)
+    commit_calls = 0
+
+    def counting_commit() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+
+    monkeypatch.setattr(db_session, "commit", counting_commit)
+
+    assert repository.get_by_id_for_user(note_id=note.id, user_id=user.id) is note
+    assert repository.get_by_id_for_user(note_id=note.id, user_id=other.id) is None
+    note.note_text = "after"
+    assert repository.update(note) is note
+    db_session.expire(note)
+
+    assert commit_calls == 0
+    assert note.note_text == "after"
+
+
+def test_repository_delete_flushes_without_commit(db_session: Session, monkeypatch) -> None:
+    user = add_user(db_session)
+    portfolio = add_portfolio(db_session, user_id=user.id)
+    note = add_note(
+        db_session,
+        user_id=user.id,
+        portfolio_id=portfolio.id,
+        note_text="before",
+        created_at=datetime(2026, 9, 7, tzinfo=timezone.utc),
+    )
+    commit_calls = 0
+
+    def counting_commit() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+
+    monkeypatch.setattr(db_session, "commit", counting_commit)
+
+    NoteRepository(db_session).delete(note)
+
+    assert commit_calls == 0
+    assert db_session.get(Note, note.id) is None

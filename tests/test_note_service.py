@@ -133,3 +133,66 @@ def test_service_rolls_back_create_failure(db_session: Session, monkeypatch) -> 
         service(db_session).create_note(portfolio_id=portfolio.id, note_text="hello", current_user=user)
 
     assert rollback_calls == 1
+
+
+def test_service_owner_can_update_and_delete_note_after_portfolio_is_deleted(db_session: Session) -> None:
+    user = add_user(db_session)
+    portfolio = add_portfolio(db_session, user_id=user.id)
+    created = service(db_session).create_note(portfolio_id=portfolio.id, note_text="before", current_user=user)
+    portfolio.deleted_at = datetime(2026, 9, 7, tzinfo=timezone.utc)
+    db_session.commit()
+
+    updated = service(db_session).update_note(note_id=created.id, note_text="after", current_user=user)
+    service(db_session).delete_note(note_id=created.id, current_user=user)
+
+    assert updated.note_text == "after"
+    assert updated.portfolio_id == portfolio.id
+    assert db_session.get(Note, created.id) is None
+
+
+def test_service_missing_or_foreign_note_returns_404(db_session: Session) -> None:
+    owner = add_user(db_session)
+    other = add_user(db_session, email="other@example.com", username="other")
+    portfolio = add_portfolio(db_session, user_id=owner.id)
+    created = service(db_session).create_note(portfolio_id=portfolio.id, note_text="owned", current_user=owner)
+
+    for note_id, current_user in [(created.id, other), (999999, owner)]:
+        for action in [
+            lambda: service(db_session).update_note(note_id=note_id, note_text="updated", current_user=current_user),
+            lambda: service(db_session).delete_note(note_id=note_id, current_user=current_user),
+        ]:
+            with pytest.raises(HTTPException) as exc_info:
+                action()
+            assert exc_info.value.status_code == 404
+            assert exc_info.value.detail == "Note not found."
+
+
+@pytest.mark.parametrize("method_name", ["update_note", "delete_note"])
+def test_service_rolls_back_update_and_delete_commit_failures(db_session: Session, monkeypatch, method_name: str) -> None:
+    user = add_user(db_session)
+    portfolio = add_portfolio(db_session, user_id=user.id)
+    created = service(db_session).create_note(portfolio_id=portfolio.id, note_text="before", current_user=user)
+    rollback_calls = 0
+    original_rollback = db_session.rollback
+
+    def failing_commit() -> None:
+        raise RuntimeError("commit failed")
+
+    def counting_rollback() -> None:
+        nonlocal rollback_calls
+        rollback_calls += 1
+        original_rollback()
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+    monkeypatch.setattr(db_session, "rollback", counting_rollback)
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        if method_name == "update_note":
+            service(db_session).update_note(note_id=created.id, note_text="after", current_user=user)
+        else:
+            service(db_session).delete_note(note_id=created.id, current_user=user)
+
+    assert rollback_calls == 1
+    persisted = db_session.get(Note, created.id)
+    assert persisted is not None
+    assert persisted.note_text == "before"

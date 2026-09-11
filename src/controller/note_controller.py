@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from src.config.dependencies import get_current_user, get_note_service
 from src.model.user import User
-from src.request.note_request import NoteCreateRequest
+from src.request.note_request import NoteCreateRequest, NoteUpdateRequest
 from src.response.note_response import NoteListResponse, NoteResponse
 from src.services.note_service import NoteService
 
@@ -35,3 +35,27 @@ def list_notes(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> NoteListResponse:
     return note_service.list_notes(current_user=current_user, skip=skip, limit=limit)
+
+
+@router.patch("/{note_id}", response_model=NoteResponse)
+def update_note(
+    note_id: int,
+    payload: NoteUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    note_service: Annotated[NoteService, Depends(get_note_service)],
+) -> NoteResponse:
+    return note_service.update_note(
+        note_id=note_id,
+        note_text=payload.note_text,
+        current_user=current_user,
+    )
+
+
+@router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_note(
+    note_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    note_service: Annotated[NoteService, Depends(get_note_service)],
+) -> Response:
+    note_service.delete_note(note_id=note_id, current_user=current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
