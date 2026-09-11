@@ -49,7 +49,7 @@ tests/
 | Environment configuration | Complete | `.env.example` and Pydantic settings are present |
 | SQLAlchemy base/session | Complete | Engine, session factory and FastAPI DB dependency are implemented |
 | Alembic migrations | Active / working | PostgreSQL migration flow is established and used for implemented domains |
-| User/authentication domain | Complete | Register, login, current-user flow, password hashing and JWT validation are implemented |
+| User/authentication domain | Complete | Register, login, current-user flow, authenticated profile update, password hashing and JWT validation are implemented. `PATCH /api/v1/auth/me` updates only `preferred_currency` and `risk_profile`; extra/backend-owned fields are rejected. |
 | Portfolio domain | Complete | CRUD, ownership isolation, pagination and soft delete are implemented and tested |
 | Asset/data foundation | Implemented / validated (public catalog API) | Asset-linked TEFAS snapshots and related repositories/services/tests exist; nullable Asset-level ISIN metadata persistence/enrichment is implemented. Public Asset Catalog API is implemented at `GET /api/v1/assets`; it returns active assets only, supports pagination and optional case-insensitive code/name search, preserves nullable `isin` and `currency`, and does not expose market price or freshness metadata. |
 | Watchlist domain | Implemented / validated (public API contract) | Migration `20260907_0018`, following `20260903_0017`, creates user-owned `watchlist_items` with `user_id`, `asset_id`, timestamps, database uniqueness on `(user_id, asset_id)` and a user-scoped index. Authenticated APIs are implemented at `POST /api/v1/watchlist`, `GET /api/v1/watchlist` and `DELETE /api/v1/watchlist/{watchlist_item_id}`. Creation accepts only existing active assets; missing/inactive assets return 404 `Asset not found.`. A user cannot add the same asset twice; duplicates return 409 `Asset is already in watchlist.` and the DB unique constraint protects concurrent duplicate writes. Different users may track the same asset. Listing is isolated to the current user, paginated with deterministic `asset_code ASC, watchlist_item.id ASC` ordering, and existing entries remain visible if an Asset later becomes inactive. Delete is owner-only, hard-delete, and missing or other-user items return 404 `Watchlist item not found.`. Public responses expose asset metadata and `created_at` without exposing `user_id` or `updated_at`. No market-price refresh, search, PATCH, soft-delete or unrelated Asset behavior was added. |
@@ -94,6 +94,7 @@ GET    /api/v1/health
 POST   /api/v1/auth/register
 POST   /api/v1/auth/login
 GET    /api/v1/auth/me
+PATCH  /api/v1/auth/me
 GET    /api/v1/assets
 
 POST   /api/v1/portfolios
@@ -512,6 +513,18 @@ Important verified checkpoints include:
 - Focused CORS suite: **3 passed**; Auth/Portfolio/Asset/CORS regression: **35 passed**.
 - Real Uvicorn CORS preflight smoke: **PASS** for configured origin and rejection of an unconfigured origin.
 - Current full backend suite after CORS integration foundation: **1558 passed in 27.67s**.
+
+
+## Profile Update API
+
+- Authenticated `PATCH /api/v1/auth/me` is implemented and validated. The request may update only `preferred_currency` and `risk_profile`; extra fields are forbidden, empty payloads are rejected, and no user ID is accepted from the client.
+- `preferred_currency` accepts case-insensitive `TRY`, `USD`, `EUR` and `GBP`, persists/returns uppercase, and rejects explicit `null`.
+- `risk_profile` accepts the existing AI-compatible alias set, persists/returns only canonical `muhafazakar`, `dengeli` or `agresif`, and explicit `null` clears the preference. Registration behavior remains unchanged.
+- No model, schema or Alembic migration change was introduced. The update uses the authenticated `current_user` and the existing User repository transaction pattern.
+- Profile/Auth plus AI risk-profile regression set: **142 passed**. The complete supported risk-profile alias matrix, including uppercase Turkish `DÜŞÜK` and `YÜKSEK`, is covered by tests.
+- GPT-5.6 Sol High security/correctness review: **PASS** with no blocking findings. Commit-failure rollback/state restoration, two-user isolation, forbidden-field attacks and omitted-field preservation were strengthened without production-code changes.
+- Full backend regression after Profile Update: **2120 passed** with the same **12 known pre-existing non-blocking Starlette HTTP-422 deprecation warnings**.
+- Real PostgreSQL + live Uvicorn HTTP acceptance: **PASS**. It verified lowercase currency normalization to `USD`, Turkish risk alias `yüksek -> agresif`, persisted values through `GET /api/v1/auth/me`, explicit risk-profile clearing with `null`, and explicit cleanup of the temporary smoke user.
 
 ## Recent Git milestones
 
