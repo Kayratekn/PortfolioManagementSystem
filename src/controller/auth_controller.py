@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status
 
 from src.config.dependencies import get_current_user, get_token_service, get_user_service
 from src.model.user import User
-from src.request.user_request import UserCreateRequest, UserLoginRequest
+from src.request.user_request import UserCreateRequest, UserLoginRequest, UserUpdateRequest
 from src.response.user_response import AuthTokenResponse, UserResponse
 from src.services.token_service import TokenService
 from src.services.user_service import UserService
@@ -41,3 +41,13 @@ def login(
 @router.get("/me", response_model=UserResponse)
 def me(current_user: Annotated[User, Depends(get_current_user)]) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_me(
+    payload: UserUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
+) -> UserResponse:
+    user = user_service.update_profile(payload=payload, current_user=current_user)
+    return UserResponse.model_validate(user)

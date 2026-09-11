@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 
 from src.model.user import User
 from src.repositories.user_repository import UserRepository
-from src.request.user_request import UserCreateRequest, UserLoginRequest
+from src.request.user_request import UserCreateRequest, UserLoginRequest, UserUpdateRequest
 from src.services.password_service import PasswordService
 
 
@@ -51,3 +51,10 @@ class UserService:
 
     def get_user_by_id(self, user_id: int) -> User | None:
         return self.user_repository.get_by_id(user_id)
+
+    def update_profile(self, *, payload: UserUpdateRequest, current_user: User) -> User:
+        if "preferred_currency" in payload.model_fields_set:
+            current_user.preferred_currency = payload.preferred_currency
+        if "risk_profile" in payload.model_fields_set:
+            current_user.risk_profile = payload.risk_profile
+        return self.user_repository.update(current_user)
