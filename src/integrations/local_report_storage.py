@@ -109,6 +109,13 @@ class LocalReportStorage:
 
         raise ReportStorageError("Stored report file could not be removed.") from last_error
 
+    def read_bytes(self, storage_key: str) -> bytes:
+        path = self._path_for_key(storage_key)
+        try:
+            return path.read_bytes()
+        except OSError as exc:
+            raise ReportStorageError("Stored report file could not be read.") from exc
+
     def _cleanup_failed_save(self, storage_key: str) -> None:
         try:
             self.cleanup(storage_key)
