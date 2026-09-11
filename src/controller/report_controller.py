@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 
 from src.config.dependencies import (
     get_current_user,
+    get_report_download_service,
     get_report_qa_service,
     get_report_read_service,
     get_report_upload_service,
@@ -15,6 +16,7 @@ from src.request.report_qa_request import ReportQaRequest
 from src.response.report_qa_response import ReportQaResponse
 from src.response.report_response import ReportListResponse, ReportResponse, ReportUploadResponse
 from src.services.report_qa_service import ReportQaService
+from src.services.report_download_service import ReportDownloadService
 from src.services.report_read_service import ReportReadService
 from src.services.report_upload_service import ReportUploadService
 
@@ -44,6 +46,15 @@ def list_reports(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> ReportListResponse:
     return report_read_service.list_reports(current_user=current_user, skip=skip, limit=limit)
+
+
+@router.get("/{report_id}/download")
+def download_report(
+    report_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    report_download_service: Annotated[ReportDownloadService, Depends(get_report_download_service)],
+):
+    return report_download_service.download_report(report_id=report_id, current_user=current_user)
 
 
 @router.get("/{report_id}", response_model=ReportResponse)

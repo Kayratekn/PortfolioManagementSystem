@@ -984,6 +984,28 @@ Status: COMPLETE - 2026-09-11
 - Full backend regression after Report Library Read API: **2129 passed** with the same **12 known pre-existing non-blocking Starlette HTTP-422 deprecation warnings**.
 - Real PostgreSQL + live Uvicorn HTTP acceptance: **PASS**. It verified authentication, user-scoped pagination and ordering, owned detail access, indistinguishable foreign/missing 404 behavior, exact public response fields and cleanup of all temporary report/user rows.
 
+
+## Report Download API
+
+Status: COMPLETE - 2026-09-11
+
+- Added authenticated report download endpoint:
+  - `GET /api/v1/reports/{report_id}/download`
+- Report ownership is verified using both `report_id` and the authenticated `user_id` before any storage or filesystem access.
+- Missing and cross-user reports both return canonical HTTP 404 `Report not found.`.
+- Owner downloads return the exact persisted PDF bytes with `Content-Type: application/pdf`.
+- Client-visible download filenames use the persisted `original_filename` through RFC 5987 `filename*` encoding.
+- Internal `storage_key`, SHA-256 values, filesystem paths and operating-system error details are never exposed.
+- Invalid storage keys and traversal attempts remain contained by the existing storage-key validation and resolved-root checks.
+- Existing DB rows whose stored PDF is missing or unreadable return stable HTTP 500 `Report file is unavailable.` without leaking internal paths.
+- Download does not load ReportChunk rows and does not resolve or call the AI client.
+- ReportReadService remains metadata-only and storage-free.
+- No model, schema, repository or Alembic migration change was introduced.
+- Focused Report Download + Report Library Read + Report Upload + Report Q&A regression: **82 passed**.
+- GPT-5.6 Sol High security/filesystem correctness review: **PASS** with no blocking findings.
+- Full backend regression after Report Download API: **2136 passed** with the same **12 known pre-existing non-blocking Starlette HTTP-422 deprecation warnings**.
+- Real PostgreSQL + real stored PDF + live Uvicorn HTTP acceptance: **PASS**. It verified authentication, exact owner download bytes, PDF media type, safe client filename, cross-user isolation, missing-report behavior, internal metadata non-disclosure and cleanup of all temporary DB rows and stored files.
+
 ## Sentiment / Expert Source Foundation
 
 Status: IMPLEMENTED / VALIDATED - 2026-09-08
