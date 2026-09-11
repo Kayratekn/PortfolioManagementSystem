@@ -964,6 +964,26 @@ Status: COMPLETE - 2026-09-08
 - compileall and git diff --check passed.
 - No migration added; Alembic head remains 20260908_0024.
 
+
+## Report Library Read API
+
+Status: COMPLETE - 2026-09-11
+
+- Added authenticated read-only report-library endpoints:
+  - `GET /api/v1/reports`
+  - `GET /api/v1/reports/{report_id}`
+- List access is scoped only to the authenticated user, supports `skip >= 0` and `limit 1..100` with defaults `skip=0` and `limit=50`, and returns deterministic `created_at DESC, id DESC` ordering.
+- Detail lookup is scoped by both `report_id` and authenticated `user_id`; missing and cross-user reports both return canonical HTTP 404 `Report not found.`.
+- Public report metadata is limited to `report_id`, `original_filename`, `content_type`, `file_size_bytes`, `page_count` and `created_at`.
+- `user_id`, `storage_key`, SHA-256, filesystem paths, chunk text and `chunk_count` are not exposed.
+- Report Library reads do not access stored PDF files, do not load report chunks, and do not resolve or call the AI client.
+- Existing Report Upload and Report Q&A behavior remains unchanged.
+- No model, schema or Alembic migration change was introduced.
+- Focused Report Library + existing Report Upload/Q&A regression: **75 passed**.
+- GPT-5.6 Sol High security/correctness review: **PASS** with no blocking findings.
+- Full backend regression after Report Library Read API: **2129 passed** with the same **12 known pre-existing non-blocking Starlette HTTP-422 deprecation warnings**.
+- Real PostgreSQL + live Uvicorn HTTP acceptance: **PASS**. It verified authentication, user-scoped pagination and ordering, owned detail access, indistinguishable foreign/missing 404 behavior, exact public response fields and cleanup of all temporary report/user rows.
+
 ## Sentiment / Expert Source Foundation
 
 Status: IMPLEMENTED / VALIDATED - 2026-09-08
